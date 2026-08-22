@@ -1,0 +1,6 @@
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+find_dependency(OpenCV 4 COMPONENTS core imgproc imgcodecs)
+find_dependency(Threads)
+include("${CMAKE_CURRENT_LIST_DIR}/OpenShapeMatchTargets.cmake")
+check_required_components(OpenShapeMatch)

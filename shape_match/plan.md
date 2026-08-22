@@ -29,7 +29,7 @@ OpenCV 负责：
 
 以下功能不进入首阶段验收：
 
-- 尺度搜索；
+- 尺度搜索（首阶段延期，已在 0.2 扩展阶段完成）；
 - polarity、local polarity 和 global polarity；
 - 遮挡建模和变形匹配；
 - 亚像素优化；
@@ -545,3 +545,14 @@ $$
 - 首阶段尺度固定为 1.0；亚像素、遮挡、持久化和完整 HALCON 兼容延期。
 - 标量单线程正确性优先于 SIMD 和多线程；所有优化必须有结果一致性回归。
 - 当前文档只定义实施计划，不包含代码实现。
+
+## 实施状态
+
+- Phase 0–6：已完成首阶段正确性基线，包含 C++17/OpenCV 工程、模型/边缘/金字塔、粗到细匹配、NMS、测试、示例和 benchmark。
+- Phase 7A：已完成 SoA 模型缓存、可复用 `EdgeMap` 搜索入口、标量/SoA 一致性测试和 benchmark 分项计时。详见 [`docs/phase-7-handoff.md`](docs/phase-7-handoff.md)。
+- Phase 7B：已完成完整场景 `EdgePyramid` 缓存、portable score dispatch 入口、CPU 特性探测和多尺寸/多线程 benchmark 矩阵。详见 [`docs/phase-7b-handoff.md`](docs/phase-7b-handoff.md)。
+- Phase 7C：已完成 AVX2 实验 score kernel、独立 ISA 编译、opt-in 运行时分派和逐 pose 数值回归；因端到端 benchmark 慢于 portable SoA，默认保持 portable。详见 [`docs/phase-7c-handoff.md`](docs/phase-7c-handoff.md)。
+- Phase 7D：已完成 summed-area/Canny 有效点保守预筛选、粗层行任务并行和 `SearchStats` 分项统计，显著减少完整 score 调用。详见 [`docs/phase-7d-handoff.md`](docs/phase-7d-handoff.md)。
+- Phase 7E：已完成按角度/层预计算旋转模型点、多轮 p50/p95/p99 benchmark 和稀疏/多角度/clutter 回归。详见 [`docs/phase-7e-handoff.md`](docs/phase-7e-handoff.md)。
+- Phase 8：已完成 0.1.0 版本/ABI 元数据、CMake install/export、外部 package consumer 测试、结果绘制接口和 HALCON-like 兼容矩阵。详见 [`docs/phase-8-handoff.md`](docs/phase-8-handoff.md)、[`docs/release-0.1.0.md`](docs/release-0.1.0.md) 与 [`docs/final-handoff.md`](docs/final-handoff.md)。
+- 0.2 尺度搜索阶段：已完成正等比离散尺度参数、角度×尺度联合缓存与粗到细搜索、尺度感知评分/NMS/绘制、固定尺度兼容回归、缩放/旋转/多尺度目标集成测试及 benchmark 场景。详见 [`docs/release-0.2.0.md`](docs/release-0.2.0.md) 与 [`docs/scale-search-handoff.md`](docs/scale-search-handoff.md)。
