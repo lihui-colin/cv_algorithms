@@ -42,11 +42,16 @@ void SearchParams::validate() const {
   if (refinement_variants_per_peak == 0)
     throw InvalidArgument("refinement_variants_per_peak must be positive");
   if (refinement_radius < 0 || num_threads < 0) throw InvalidArgument("invalid refinement radius or thread count");
+  if (max_pyramid_levels < 1 || max_pyramid_levels > 5)
+    throw InvalidArgument("max_pyramid_levels must be in [1, 5]");
   if (num_levels < 0) throw InvalidArgument("num_levels cannot be negative");
   if (!std::isfinite(min_visible_fraction) || min_visible_fraction <= 0 || min_visible_fraction > 1)
     throw InvalidArgument("min_visible_fraction must be in (0, 1]");
   if (!std::isfinite(greediness) || greediness < 0 || greediness > 1)
     throw InvalidArgument("greediness must be in [0, 1]");
+  if (!std::isfinite(pruning_audit_rate) || pruning_audit_rate < 0 ||
+      pruning_audit_rate > 1)
+    throw InvalidArgument("pruning_audit_rate must be in [0, 1]");
   if (!std::isfinite(coarse_point_fraction) || coarse_point_fraction <= 0 ||
       coarse_point_fraction > 1)
     throw InvalidArgument("coarse_point_fraction must be in (0, 1]");
@@ -72,6 +77,15 @@ void SearchParams::validate() const {
       !std::isfinite(min_orientation_consistency) || min_orientation_consistency < 0 ||
       min_orientation_consistency > 1)
     throw InvalidArgument("invalid exhaustive validation thresholds");
+  switch (compute_kernel) {
+    case ComputeKernel::Auto:
+    case ComputeKernel::Scalar:
+    case ComputeKernel::AVX2:
+    case ComputeKernel::AVX512:
+      break;
+    default:
+      throw InvalidArgument("unknown compute kernel");
+  }
 }
 
 void SearchParams::enable_fast_pipeline() {

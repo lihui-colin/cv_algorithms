@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <memory>
 #include <string>
 #include <vector>
 #include "openshape/core/error.hpp"
@@ -77,6 +78,16 @@ enum class PolarityMode {
   LocalEither
 };
 
+// Precise exhaustive-search implementation selection.  Auto selects the
+// best kernel available in the current build/runtime; explicit ISA requests
+// are validated and never silently downgraded.
+enum class ComputeKernel {
+  Auto,
+  Scalar,
+  AVX2,
+  AVX512,
+};
+
 struct ShapeModelParams {
   cv::Rect roi{};
   cv::Point2f origin{-1.f, -1.f};
@@ -119,6 +130,13 @@ struct SearchParams {
   int refinement_radius = 2;
   int num_threads = 0;
   bool deterministic = true;
+  // Coarse-to-fine candidate-pattern search.  When enabled, angle/scale
+  // patterns are searched on the coarsest scene/model pyramid level and only
+  // surviving poses are propagated to finer levels.  Final v2 candidates are
+  // always rescored with the canonical precise level-0 scorer.
+  bool enable_pyramid_candidate_search = false;
+  // Hard cap for both model and scene search pyramids.
+  int max_pyramid_levels = 5;
   // At the global/coarsest level, reject poses that cannot reach the minimum
   // valid Canny-point count before running the orientation score kernel.
   bool enable_coarse_prefilter = true;
@@ -132,6 +150,13 @@ struct SearchParams {
   // candidate clustering/early termination are disabled, and final poses are
   // revalidated against the complete model. This is the default.
   bool strict_detection = true;
+  // Certified pruning for the exhaustive reference path. Disabled by
+  // default until equivalence and performance have been audited on the
+  // application's own data.
+  bool enable_safe_pruning = false;
+  // Deterministic fraction of safely rejected poses that are rescored in
+  // full. Audit failures are retained instead of being rejected.
+  double pruning_audit_rate = 0.0;
   // Safe score-upper-bound pruning. Zero disables it; values near one check
   // the bound more frequently and trade a little branch overhead for faster
   // rejection of poor orientation matches.
@@ -168,6 +193,7 @@ struct SearchParams {
   double refinement_position_tolerance = 1e-3;
   double refinement_angle_tolerance = 1e-3;
   double refinement_scale_tolerance = 1e-5;
+  ComputeKernel compute_kernel = ComputeKernel::Auto;
   void enable_fast_pipeline();
   void validate() const;
 };
@@ -176,6 +202,11 @@ struct SearchStats {
   std::size_t angle_candidate_count = 0;
   std::size_t scale_candidate_count = 0;
   std::size_t transform_candidate_count = 0;
+  std::size_t theoretical_pose_count = 0;
+  std::size_t domain_enumerated_pose_count = 0;
+  std::size_t domain_skipped_pose_count = 0;
+  std::size_t aabb_domain_skipped_pose_count = 0;
+  std::size_t edge_domain_skipped_pose_count = 0;
   std::size_t pose_evaluations = 0;
   std::size_t prefilter_evaluations = 0;
   std::size_t prefilter_rejections = 0;
@@ -207,7 +238,42 @@ struct SearchStats {
   std::size_t score_bound_terminations = 0;
   std::size_t visible_bound_terminations = 0;
   std::size_t bound_terminated_point_evaluations = 0;
+  std::size_t safe_pruning_rejections = 0;
+  std::size_t aabb_roi_rejections = 0;
+  std::size_t edge_coverage_rejections = 0;
+  std::size_t omitted_point_evaluations = 0;
+  std::size_t pruning_audit_evaluations = 0;
+  std::size_t pruning_audit_failures = 0;
   double max_termination_upper_bound = 0.0;
+  // Phase-3 workspace/cache and timing counters.  Wall-clock fields are
+  // call-side elapsed time; worker_score_cpu_time_ms is the sum of worker
+  // CPU durations and may exceed wall time when running in parallel.
+  std::size_t workspace_cache_hits = 0;
+  std::size_t workspace_cache_misses = 0;
+  std::size_t workspace_cache_rebuilds = 0;
+  // Singular aliases retained for callers that model these as per-call
+  // booleans/counters rather than aggregate totals.
+  std::size_t workspace_cache_hit = 0;
+  std::size_t workspace_cache_miss = 0;
+  std::size_t workspace_cache_rebuild = 0;
+  std::size_t workspace_memory_bytes = 0;
+  double cache_lookup_wall_time_ms = 0.0;
+  double transform_table_preparation_wall_time_ms = 0.0;
+  double domain_preparation_wall_time_ms = 0.0;
+  double parallel_search_wall_time_ms = 0.0;
+  double worker_score_cpu_time_ms = 0.0;
+  double worker_merge_sort_wall_time_ms = 0.0;
+  std::size_t actual_worker_count = 1;
+  std::size_t worker_count = 1;
+  ComputeKernel selected_precise_kernel = ComputeKernel::Scalar;
+  std::size_t simd_batch_count = 0;
+  std::size_t simd_active_lane_count = 0;
+  std::size_t scalar_tail_count = 0;
+  std::size_t scalar_fallback_count = 0;
+  std::size_t simd_batches = 0;
+  std::size_t simd_active_lanes = 0;
+  std::size_t scalar_tail = 0;
+  std::size_t scalar_fallbacks = 0;
 };
 
 enum class MatchStatus { Accepted, Rejected, Ambiguous };

@@ -8,7 +8,7 @@ namespace openshape {
 namespace {
 int auto_levels(const cv::Size& size) {
   int levels = 1; int w = size.width, h = size.height;
-  while (w >= 32 && h >= 32 && levels < 8) { w = (w + 1) / 2; h = (h + 1) / 2; ++levels; }
+  while (w >= 32 && h >= 32 && levels < 5) { w = (w + 1) / 2; h = (h + 1) / 2; ++levels; }
   return levels;
 }
 
@@ -43,7 +43,7 @@ ModelPyramid ModelPyramid::build(const ShapeModel& model, int num_levels) {
   if (count == 0) {
     count = 1;
     int w = model.roi_.width, h = model.roi_.height;
-    while (w >= 32 && h >= 32 && count < 8) {
+    while (w >= 32 && h >= 32 && count < 5) {
       w = (w + 1) / 2; h = (h + 1) / 2; ++count;
     }
   }
@@ -60,9 +60,12 @@ ModelPyramid ModelPyramid::build(const ShapeModel& model, int num_levels) {
 }
 
 EdgePyramid EdgePyramid::build(const ImageView& image, const ShapeModelParams& params,
-                               int num_levels, bool continuous_fields) {
+                               int num_levels, bool continuous_fields,
+                               bool subpixel_fields) {
   params.validate();
-  return build(EdgeEngine::compute(image, params, continuous_fields), params, num_levels);
+  EdgeMap level_zero = EdgeEngine::compute(
+      image, params, continuous_fields, subpixel_fields);
+  return build(level_zero, params, num_levels);
 }
 
 EdgePyramid EdgePyramid::build(const EdgeMap& level_zero, const ShapeModelParams& params,
@@ -83,7 +86,7 @@ EdgePyramid EdgePyramid::build(const EdgeMap& level_zero, const ShapeModelParams
     cv::Mat down;
     cv::pyrDown(previous_gray, down);
     pyramid.levels_.push_back(EdgeEngine::compute(
-        ImageView(down), params, !level_zero.soft_edge_response.empty()));
+        ImageView(down), params, false, false));
   }
   return pyramid;
 }

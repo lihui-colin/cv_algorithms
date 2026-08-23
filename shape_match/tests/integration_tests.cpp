@@ -142,6 +142,46 @@ void test_scale_search() {
   }
 }
 
+void test_pyramid_multiscale_range() {
+  const cv::Mat templ = make_template();
+  openshape::ShapeModelParams model_params;
+  model_params.min_gradient_magnitude = 1;
+  model_params.min_model_points = 8;
+  model_params.max_model_points = 250;
+  model_params.min_point_distance = 2;
+  model_params.num_levels = 3;
+  model_params.model_version = 2;
+  const auto model = openshape::create_shape_model(templ, model_params);
+
+  for (double expected_scale : {0.8, 1.2}) {
+    cv::Mat scene = cv::Mat::zeros(220, 260, CV_8UC1);
+    const cv::Point2f center(130, 110);
+    place_transformed_template(templ, scene, center, 0.0, expected_scale);
+    auto params = search_params();
+    params.enable_pyramid_candidate_search = true;
+    params.max_pyramid_levels = 3;
+    params.num_levels = 3;
+    params.scale_min = 0.8;
+    params.scale_max = 1.2;
+    params.scale_step = 0.05;
+    params.min_score = 0.30;
+    params.search_roi = cv::Rect(112, 92, 36, 36);
+    openshape::SearchStats stats;
+    const auto results = openshape::find_shape_models(scene, model, params, &stats);
+    check(!results.empty(), "pyramid multi-scale search detects boundary scale target");
+    check(stats.scale_candidate_count == 9 && stats.transform_candidate_count ==
+              stats.angle_candidate_count * 9,
+          "pyramid multi-scale search enumerates the complete 0.8-1.2 grid");
+    if (!results.empty()) {
+      check(std::abs(results.front().column - center.x) <= 4.0 &&
+                std::abs(results.front().row - center.y) <= 4.0,
+            "pyramid multi-scale target position is within tolerance");
+      check(std::abs(results.front().scale - expected_scale) <= params.scale_step + 1e-9,
+            "pyramid multi-scale result preserves the selected scale");
+    }
+  }
+}
+
 void test_combined_rotation_and_scale() {
   const cv::Mat templ = make_template();
   const auto model = make_model(templ);
@@ -307,6 +347,7 @@ int main() {
   test_rotation();
   test_multiple_and_negative();
   test_scale_search();
+  test_pyramid_multiscale_range();
   test_combined_rotation_and_scale();
   test_multiple_scales_and_negative();
   test_subpixel_refinement();

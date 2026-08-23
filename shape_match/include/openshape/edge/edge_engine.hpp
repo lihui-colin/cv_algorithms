@@ -21,10 +21,12 @@ class EdgeEngine {
 public:
   static cv::Mat to_gray(const ImageView& image);
   static EdgeMap compute(const ImageView& image, const ShapeModelParams& params,
-                         bool continuous_fields = false);
+                         bool continuous_fields = false,
+                         bool subpixel_fields = true);
   static EdgeMap compute(const cv::Mat& image, const ShapeModelParams& params,
-                         bool continuous_fields = false) {
-    return compute(ImageView(image), params, continuous_fields);
+                         bool continuous_fields = false,
+                         bool subpixel_fields = true) {
+    return compute(ImageView(image), params, continuous_fields, subpixel_fields);
   }
 };
 }

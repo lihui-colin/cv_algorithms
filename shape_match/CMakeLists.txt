@@ -5,6 +5,7 @@ include(CheckCXXCompilerFlag)
 
 option(OPENSHAPE_ENABLE_AVX2 "Compile the AVX2 score kernel when supported" ON)
 option(OPENSHAPE_USE_AVX2_BY_DEFAULT "Select AVX2 at runtime when available" OFF)
+option(OPENSHAPE_ENABLE_AVX512 "Compile the AVX-512 precise kernel translation unit when supported" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,6 +23,7 @@ find_package(OpenCV 4 QUIET COMPONENTS core imgproc imgcodecs)
 if(NOT OpenCV_FOUND)
   message(FATAL_ERROR "OpenCV 4 development package (core, imgproc, imgcodecs) is required. Set OpenCV_DIR or install libopencv-dev.")
 endif()
+
 find_package(Threads REQUIRED)
 
 add_library(openshape_match
@@ -31,6 +33,7 @@ add_library(openshape_match
     src/model/shape_model.cpp
     src/pyramid/pyramid.cpp
     src/matcher/matcher.cpp
+    src/matcher/pruning.cpp
     src/matcher/exhaustive_matcher.cpp
 )
 add_library(openshape::OpenShapeMatch ALIAS openshape_match)
@@ -50,7 +53,7 @@ set_target_properties(openshape_match PROPERTIES
 if(MSVC)
   target_compile_options(openshape_match PRIVATE /W4 /permissive-)
 else()
-  target_compile_options(openshape_match PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(openshape_match PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
 endif()
 
 # Compile ISA-specific code in a separate object target. The main library
@@ -61,12 +64,24 @@ if(OPENSHAPE_ENABLE_AVX2 AND NOT MSVC)
     add_library(openshape_avx2 OBJECT src/matcher/score_avx2.cpp)
     target_include_directories(openshape_avx2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${OpenCV_INCLUDE_DIRS})
     target_compile_features(openshape_avx2 PRIVATE cxx_std_17)
-    target_compile_options(openshape_avx2 PRIVATE -mavx2)
+    target_compile_options(openshape_avx2 PRIVATE -mavx2 -ffp-contract=off)
     target_sources(openshape_match PRIVATE $<TARGET_OBJECTS:openshape_avx2>)
     target_compile_definitions(openshape_match PRIVATE OPENSHAPE_HAS_AVX2_KERNEL=1)
     if(OPENSHAPE_USE_AVX2_BY_DEFAULT)
       target_compile_definitions(openshape_match PRIVATE OPENSHAPE_USE_AVX2_BY_DEFAULT=1)
     endif()
+  endif()
+endif()
+
+if(OPENSHAPE_ENABLE_AVX512 AND NOT MSVC)
+  check_cxx_compiler_flag("-mavx512f" OPENSHAPE_COMPILER_HAS_MAVX512)
+  if(OPENSHAPE_COMPILER_HAS_MAVX512)
+    add_library(openshape_avx512 OBJECT src/matcher/score_avx512.cpp)
+    target_include_directories(openshape_avx512 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${OpenCV_INCLUDE_DIRS})
+    target_compile_features(openshape_avx512 PRIVATE cxx_std_17)
+    target_compile_options(openshape_avx512 PRIVATE -mavx512f -mavx512dq -mavx512bw -mavx512vl -ffp-contract=off)
+    target_sources(openshape_match PRIVATE $<TARGET_OBJECTS:openshape_avx512>)
+    target_compile_definitions(openshape_match PRIVATE OPENSHAPE_HAS_AVX512_KERNEL=1)
   endif()
 endif()
 
@@ -77,6 +92,10 @@ option(BUILD_BENCHMARK "Build the lightweight matching benchmark" OFF)
 if(BUILD_BENCHMARK)
   add_executable(shape_match_benchmark benchmark/benchmark.cpp)
   target_link_libraries(shape_match_benchmark PRIVATE openshape_match)
+  add_executable(shape_match_pruning_benchmark benchmark/pruning_benchmark.cpp)
+  target_link_libraries(shape_match_pruning_benchmark PRIVATE openshape_match)
+  add_executable(shape_match_multi_target_benchmark benchmark/multi_target_benchmark.cpp)
+  target_link_libraries(shape_match_multi_target_benchmark PRIVATE openshape_match)
 endif()
 
 include(CTest)
@@ -90,6 +109,9 @@ if(BUILD_TESTING)
   add_executable(openshape_integration_tests tests/integration_tests.cpp)
   target_link_libraries(openshape_integration_tests PRIVATE openshape_match)
   add_test(NAME openshape_integration_tests COMMAND openshape_integration_tests)
+  add_executable(openshape_pruning_equivalence_tests tests/pruning_equivalence_tests.cpp)
+  target_link_libraries(openshape_pruning_equivalence_tests PRIVATE openshape_match)
+  add_test(NAME openshape_pruning_equivalence_tests COMMAND openshape_pruning_equivalence_tests)
   add_test(NAME openshape_package_consumer
     COMMAND ${CMAKE_COMMAND}
       -DOPENSHAPE_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}

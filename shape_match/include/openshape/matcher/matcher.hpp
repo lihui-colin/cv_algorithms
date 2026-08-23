@@ -5,6 +5,7 @@
 #include "openshape/pyramid/pyramid.hpp"
 
 namespace openshape {
+class ExhaustiveSearchWorkspace;
 std::vector<MatchResult> find_shape_models(const ImageView& image,
                                            const ShapeModel& model,
                                            const SearchParams& params = {},
@@ -41,10 +42,27 @@ std::vector<MatchResult> find_shape_models(const EdgeMap& scene,
                                            const ShapeModel& model,
                                            const SearchParams& params = {},
                                            SearchStats* stats = nullptr);
+std::vector<MatchResult> find_shape_models(const ImageView& image,
+                                           const ShapeModel& model,
+                                           const SearchParams& params,
+                                           ExhaustiveSearchWorkspace* workspace,
+                                           SearchStats* stats = nullptr);
+std::vector<MatchResult> find_shape_models(const EdgeMap& scene,
+                                           const ShapeModel& model,
+                                           const SearchParams& params,
+                                           ExhaustiveSearchWorkspace* workspace,
+                                           SearchStats* stats = nullptr);
 std::vector<MatchResult> find_shape_models(const EdgePyramid& scene,
                                            const ShapeModel& model,
                                            const SearchParams& params = {},
                                            SearchStats* stats = nullptr);
+inline std::vector<MatchResult> find_shape_models(const cv::Mat& image,
+                                                  const ShapeModel& model,
+                                                  const SearchParams& params,
+                                                  ExhaustiveSearchWorkspace* workspace,
+                                                  SearchStats* stats = nullptr) {
+  return find_shape_models(ImageView(image), model, params, workspace, stats);
+}
 double bounding_box_overlap(const ShapeModel& model, const MatchResult& a,
                             const MatchResult& b);
 std::vector<MatchResult> non_max_suppression(const ShapeModel& model,

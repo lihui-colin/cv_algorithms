@@ -62,6 +62,8 @@ void test_parameters_and_angles() {
   SearchParams search;
   search.validate();
   check(search.enable_coarse_prefilter, "coarse valid-point prefilter is enabled by default");
+  check(!search.enable_safe_pruning && search.pruning_audit_rate == 0.0,
+        "certified pruning and its audit are opt-in");
   check(search.scale_min == 1.0 && search.scale_max == 1.0 && search.scale_step == 0.05,
         "scale search defaults preserve fixed-scale matching");
   search.min_score = 1.1;
@@ -83,6 +85,10 @@ void test_parameters_and_angles() {
   search.greediness = 1.1;
   check_throws<InvalidArgument>([&] { search.validate(); }, "greediness above one is rejected");
   search.greediness = 0.0;
+  search.pruning_audit_rate = 1.1;
+  check_throws<InvalidArgument>([&] { search.validate(); },
+                                "pruning audit rate above one is rejected");
+  search.pruning_audit_rate = 0.0;
   search.coarse_point_fraction = 0.0;
   check_throws<InvalidArgument>([&] { search.validate(); }, "zero coarse point fraction is rejected");
   search.coarse_point_fraction = 1.0;

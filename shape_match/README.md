@@ -112,6 +112,67 @@ compatibility are documented in [`docs/release-0.2.0.md`](docs/release-0.2.0.md)
 [`docs/compatibility.md`](docs/compatibility.md), and the
 [`scale-search handoff`](docs/scale-search-handoff.md).
 
+The next correctness-focused milestone is documented in
+[`docs/exhaustive-precision-plan.md`](docs/exhaustive-precision-plan.md). It
+defines a low-threshold pyramid reference search for recall, false-positive
+control, and 1/30-pixel pose accuracy. Rotation and scale are searched with
+wide inherited windows at every pyramid level; the coarse level covers the
+full configured ranges and finer levels may inherit multiple broad candidate
+windows. Aggressive pruning and search-speed optimization are explicitly
+deferred until this reference path is validated. The reference path may use
+only certified early rejection when the remaining points cannot possibly
+exceed the current low threshold. Coarse candidate thresholds apply jointly to
+translation, rotation, and scale poses and are intentionally low to preserve
+recall; final acceptance is decided only by full level-0 verification.
+
+The follow-up pruning and speed-optimization work is specified in
+[`docs/pruning-optimization-plan.md`](docs/pruning-optimization-plan.md). It
+freezes the first-stage timing measurements as the performance baseline and
+requires every pruning change to remain equivalent to the exhaustive reference
+path before enabling it by default.
+
+### Coarse-to-fine v2 candidate search
+
+High-precision models can opt into the five-level candidate-pattern search:
+
+```cpp
+ShapeModelParams model_params;
+model_params.model_version = 2;
+model_params.num_levels = 5;
+
+SearchParams search;
+search.enable_pyramid_candidate_search = true;
+search.max_pyramid_levels = 5;
+search.num_levels = 5;
+```
+
+The coarsest level searches a level-dependent subset of the angle/scale
+pattern grid. Neighboring angle hypotheses are restored as candidates move to
+finer levels, ending at the configured finest angular resolution. Spatial,
+angle, and scale jobs are deduplicated before parallel scoring.
+
+To search targets whose size may vary, configure the discrete scale grid
+explicitly. For example, the standard 0.8--1.2 range uses nine candidates:
+
+```cpp
+search.scale_min = 0.8;
+search.scale_max = 1.2;
+search.scale_step = 0.05;
+```
+
+The selected scale is retained in `MatchResult::scale` and participates in
+candidate propagation, duplicate suppression, final scoring, and NMS. The
+default remains `1.0` for backward-compatible fixed-scale latency; callers
+that need scale variation should set the range above.
+
+For multi-object searches, level-0 candidates are grouped into spatial peaks
+before precise scoring. Each spatial peak receives its own bounded set of
+angle/scale variants, so repeated high scores around one object cannot consume
+the complete precise shortlist. Candidates retained from every peak are
+rescored with the canonical precise scorer before final target-level NMS.
+Template/model creation remains outside the match call and the scene pyramid
+is created per input image.
+
 ## Scope
 
 The first implementation milestone targets a reproducible coarse-to-fine

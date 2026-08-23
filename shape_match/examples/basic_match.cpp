@@ -14,6 +14,7 @@ int main(int argc, char** argv) {
     const auto model = openshape::ShapeModelBuilder::create(templ.view(), mp);
     openshape::SearchParams sp;
     sp.angle_start = -30; sp.angle_extent = 60; sp.angle_step = 2;
+    sp.scale_min = 0.8; sp.scale_max = 1.2; sp.scale_step = 0.05;
     sp.num_matches = 5; sp.min_score = 0.55;
     const auto results = openshape::find_shape_models(scene.view(), model, sp);
     for (const auto& r : results)

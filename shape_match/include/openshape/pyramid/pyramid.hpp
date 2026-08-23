@@ -25,7 +25,8 @@ private:
 class EdgePyramid {
 public:
   static EdgePyramid build(const ImageView& image, const ShapeModelParams& params,
-                           int num_levels = 0, bool continuous_fields = false);
+                           int num_levels = 0, bool continuous_fields = false,
+                           bool subpixel_fields = true);
   static EdgePyramid build(const EdgeMap& level_zero, const ShapeModelParams& params,
                            int num_levels = 0);
   const std::vector<EdgeMap>& levels() const { return levels_; }
