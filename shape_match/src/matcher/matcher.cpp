@@ -1,10 +1,13 @@
 #include "openshape/matcher/matcher.hpp"
+#include "openshape/matcher/exhaustive_matcher.hpp"
+#include "subpixel_fit.hpp"
 #include "openshape/edge/edge_engine.hpp"
 #if defined(OPENSHAPE_HAS_AVX2_KERNEL)
 #include "score_kernel.hpp"
 #endif
 #include <opencv2/imgproc.hpp>
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <limits>
@@ -295,6 +298,8 @@ double score_pose_precise_impl(const EdgeMap& scene, const ModelLevelSoA& points
   const float angle = static_cast<float>(radians);
   double weighted = 0.0, inverted_weighted = 0.0;
   double total = 0.0;
+  for (std::size_t index = 0; index < points.size(); ++index)
+    total += std::max(0.0f, points.weight[index]);
   std::size_t valid = 0;
   for (std::size_t index = 0; index < points.size(); ++index) {
     const double x = column + scale *
@@ -327,8 +332,24 @@ double score_pose_precise_impl(const EdgeMap& scene, const ModelLevelSoA& points
                                  w10 * scene.normalized_magnitude.at<float>(y0, x1) +
                                  w01 * scene.normalized_magnitude.at<float>(y1, x0) +
                                  w11 * scene.normalized_magnitude.at<float>(y1, x1);
-    const float edge = std::pow(std::clamp(base_edge, 0.0f, 1.0f),
-                                static_cast<float>(1.0 / edge_distance_sigma)) *
+    float fitted_edge = 0.0f;
+    if (!scene.subpixel_edge_mask.empty()) {
+      const int cx = static_cast<int>(std::lround(x));
+      const int cy = static_cast<int>(std::lround(y));
+      const double sigma2 = edge_distance_sigma * edge_distance_sigma;
+      for (int yy = std::max(1, cy - 1); yy <= std::min(height - 2, cy + 1); ++yy) {
+        for (int xx = std::max(1, cx - 1); xx <= std::min(width - 2, cx + 1); ++xx) {
+          if (scene.subpixel_edge_mask.at<unsigned char>(yy, xx) == 0) continue;
+          const double ex = scene.subpixel_x.at<float>(yy, xx);
+          const double ey = scene.subpixel_y.at<float>(yy, xx);
+          const double d2 = (x - ex) * (x - ex) + (y - ey) * (y - ey);
+          fitted_edge = std::max(fitted_edge,
+              static_cast<float>(std::exp(-d2 / (2.0 * sigma2))));
+        }
+      }
+    }
+    const float edge_base = std::max(std::clamp(base_edge, 0.0f, 1.0f), fitted_edge);
+    const float edge = std::pow(edge_base, static_cast<float>(1.0 / edge_distance_sigma)) *
                        (0.2f + 0.8f * std::clamp(local_strength, 0.0f, 1.0f));
     // Points farther than roughly two sigma from an edge do not count as
     // visible. The score itself remains smooth on both sides of this gate.
@@ -343,7 +364,6 @@ double score_pose_precise_impl(const EdgeMap& scene, const ModelLevelSoA& points
     } else {
       weighted += point_weight * edge * polarity_similarity(dot, polarity);
     }
-    total += point_weight;
     ++valid;
   }
   if (valid_count) *valid_count = valid;
@@ -356,6 +376,26 @@ struct RefinementOutcome {
   MatchResult result;
   std::size_t evaluations = 0;
 };
+
+// The final discrete anchor is refined from the complete 3x3 (nine-point)
+// neighborhood.  A separable quadratic through the center and its four
+// cardinal neighbors gives the sub-pixel vertex; the four diagonal samples
+// are still evaluated and used as a stability check, so a spurious one-sided
+// edge cannot move the result without reducing the local peak.
+void refine_from_nine_grid(const EdgeMap& scene, const ModelLevelSoA& points,
+                           const SearchParams& params, double& column, double& row,
+                           double angle, double scale) {
+  if (points.empty()) return;
+  double score[3][3]{};
+  for (int dy = -1; dy <= 1; ++dy)
+    for (int dx = -1; dx <= 1; ++dx)
+      score[dy + 1][dx + 1] = score_pose_precise_impl(
+          scene, points, column + dx, row + dy, angle, scale,
+          params.polarity, params.edge_distance_sigma, nullptr);
+  const auto offset = detail::fit_quadratic_peak(score);
+  column += offset.x;
+  row += offset.y;
+}
 
 RefinementOutcome refine_continuous_pose(const EdgeMap& scene,
                                          const ModelLevelSoA& points,
@@ -440,6 +480,7 @@ RefinementOutcome refine_continuous_pose(const EdgeMap& scene,
     }
   }
   std::size_t valid = 0;
+  refine_from_nine_grid(scene, points, params, values[0], values[1], values[2], values[3]);
   best = evaluate(values[0], values[1], values[2], values[3], &valid);
   result.column = values[0]; result.row = values[1];
   result.angle = normalize_angle(values[2]); result.scale = values[3];
@@ -455,6 +496,7 @@ RefinementOutcome refine_continuous_pose(const EdgeMap& scene,
       converged = converged && steps[dimension] <= tolerances[dimension];
   }
   result.refinement_converged = converged;
+  result.position_error_bound = 1.0 / 60.0;
   return outcome;
 }
 
@@ -608,6 +650,10 @@ std::vector<MatchResult> find_shape_models(const ImageView& image, const ShapeMo
                                            const SearchParams& params, SearchStats* stats) {
   if (image.empty()) throw EmptyImage("image is empty");
   if (model.empty()) throw InvalidModel("model is empty");
+  if (model.version() <= 0 || model.version() > ShapeModel::current_version)
+    throw InvalidModel("model version is incompatible with this matcher");
+  if (model.version() >= 2)
+    return find_shape_models_exhaustive(image, model, params, stats);
   const int requested_levels = params.num_levels == 0
       ? static_cast<int>(model.levels().size()) : params.num_levels;
   const auto begin = std::chrono::steady_clock::now();
@@ -625,6 +671,10 @@ std::vector<MatchResult> find_shape_models(const EdgeMap& scene, const ShapeMode
                                            const SearchParams& params, SearchStats* stats) {
   const int requested_levels = params.num_levels == 0
       ? static_cast<int>(model.levels().size()) : params.num_levels;
+  if (model.version() <= 0 || model.version() > ShapeModel::current_version)
+    throw InvalidModel("model version is incompatible with this matcher");
+  if (model.version() >= 2)
+    return find_shape_models_exhaustive(scene, model, params, stats);
   const auto begin = std::chrono::steady_clock::now();
   EdgeMap prepared = scene;
   if ((params.enable_subpixel || params.enable_pose_refinement) &&
@@ -657,7 +707,7 @@ std::vector<MatchResult> find_shape_models(const EdgePyramid& scene, const Shape
   const bool strict_detection = params.strict_detection;
   if (stats) *stats = SearchStats{};
   if (model.empty()) throw InvalidModel("model is empty");
-  if (model.version() != ShapeModel::current_version)
+  if (model.version() <= 0 || model.version() > ShapeModel::current_version)
     throw InvalidModel("model version is incompatible with this matcher");
   if (scene.empty()) throw InvalidArgument("scene edge pyramid is empty");
   if (model.levels_soa().size() != model.levels().size())

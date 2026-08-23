@@ -1,5 +1,6 @@
 #include "openshape/model/shape_model.hpp"
 #include "openshape/pyramid/pyramid.hpp"
+#include <opencv2/imgproc.hpp>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -142,9 +143,12 @@ ModelLevelSoA make_soa(const std::vector<ModelPoint>& points) {
   soa.level = points.empty() ? 0 : points.front().level;
   soa.relative_x.reserve(points.size()); soa.relative_y.reserve(points.size());
   soa.orientation.reserve(points.size()); soa.weight.reserve(points.size());
+  soa.fit_residual.reserve(points.size()); soa.polarity.reserve(points.size()); soa.region.reserve(points.size());
   for (const auto& point : points) {
     soa.relative_x.push_back(point.relative_x); soa.relative_y.push_back(point.relative_y);
     soa.orientation.push_back(point.orientation); soa.weight.push_back(point.weight);
+    soa.fit_residual.push_back(static_cast<float>(point.fit_residual));
+    soa.polarity.push_back(point.polarity); soa.region.push_back(point.region);
   }
   return soa;
 }
@@ -152,7 +156,8 @@ ModelLevelSoA make_soa(const std::vector<ModelPoint>& points) {
 
 ShapeModel ShapeModelBuilder::create(const ImageView& image, const ShapeModelParams& params) {
   params.validate();
-  EdgeMap map = EdgeEngine::compute(image, params);
+  const bool high_precision = params.model_version >= 2;
+  EdgeMap map = EdgeEngine::compute(image, params, high_precision);
   cv::Rect roi = params.roi;
   if (roi.width == 0 || roi.height == 0) roi = cv::Rect(0, 0, map.gray.cols, map.gray.rows);
   if (roi.x < 0 || roi.y < 0 || roi.width <= 0 || roi.height <= 0 ||
@@ -168,11 +173,64 @@ ShapeModel ShapeModelBuilder::create(const ImageView& image, const ShapeModelPar
   candidates.reserve(static_cast<std::size_t>(roi.area() / 4));
   for (int y = roi.y; y < roi.y + roi.height; ++y) {
     for (int x = roi.x; x < roi.x + roi.width; ++x) {
-      if (map.edges.at<unsigned char>(y, x) == 0) continue;
+      if (map.edges.at<unsigned char>(y, x) == 0 && !high_precision) continue;
       const float m = map.magnitude.at<float>(y, x);
       if (m < params.min_gradient_magnitude) continue;
-      candidates.push_back({static_cast<float>(x), static_cast<float>(y), m, map.orientation.at<float>(y, x)});
+      double px = x, py = y, residual = 0.0;
+      int polarity = 0;
+      if (high_precision && !map.subpixel_edge_mask.empty() &&
+          map.subpixel_edge_mask.at<unsigned char>(y, x) != 0) {
+        px = map.subpixel_x.at<float>(y, x);
+        py = map.subpixel_y.at<float>(y, x);
+        residual = map.fit_residual.at<float>(y, x);
+        polarity = map.edge_polarity.at<float>(y, x) >= 0 ? 1 : -1;
+      } else if (high_precision) {
+        continue;
+      }
+      candidates.push_back({px, py, m, map.orientation.at<float>(y, x), residual, polarity, 0});
     }
+  }
+  if (high_precision && !candidates.empty()) {
+    // Densify each detected contour by linear arc-length interpolation.  The
+    // source coordinates are already sub-pixel fitted; interpolation merely
+    // guarantees the requested maximum point spacing for the model itself.
+    cv::Mat contour_mask = map.edges(roi).clone();
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(contour_mask, contours, cv::RETR_LIST, cv::CHAIN_APPROX_NONE);
+    std::vector<EdgePoint> dense;
+    const double spacing = params.high_precision_point_spacing;
+    auto fitted_at = [&](double x, double y) {
+      const int ix = std::clamp(static_cast<int>(std::lround(x)) + roi.x, 0, map.gray.cols - 1);
+      const int iy = std::clamp(static_cast<int>(std::lround(y)) + roi.y, 0, map.gray.rows - 1);
+      EdgePoint p{x + roi.x, y + roi.y, static_cast<double>(map.magnitude.at<float>(iy, ix)),
+                  static_cast<double>(map.orientation.at<float>(iy, ix)), 0.0, 0, 0};
+      if (!map.subpixel_edge_mask.empty() && map.subpixel_edge_mask.at<unsigned char>(iy, ix)) {
+        p.x = map.subpixel_x.at<float>(iy, ix);
+        p.y = map.subpixel_y.at<float>(iy, ix);
+        p.fit_residual = map.fit_residual.at<float>(iy, ix);
+        p.polarity = map.edge_polarity.at<float>(iy, ix) >= 0 ? 1 : -1;
+      }
+      return p;
+    };
+    for (const auto& contour : contours) {
+      if (contour.size() < 2) continue;
+      for (std::size_t i = 0; i < contour.size(); ++i) {
+        const cv::Point a = contour[i];
+        const cv::Point b = contour[(i + 1) % contour.size()];
+        const EdgePoint pa = fitted_at(a.x, a.y), pb = fitted_at(b.x, b.y);
+        const double length = std::hypot(pb.x - pa.x, pb.y - pa.y);
+        const int steps = std::max(1, static_cast<int>(std::ceil(length / spacing)));
+        for (int k = 0; k < steps; ++k) {
+          const double t = static_cast<double>(k) / static_cast<double>(steps);
+          dense.push_back({pa.x + t * (pb.x - pa.x), pa.y + t * (pb.y - pa.y),
+                           pa.magnitude + t * (pb.magnitude - pa.magnitude),
+                           pa.orientation + t * (pb.orientation - pa.orientation),
+                           pa.fit_residual + t * (pb.fit_residual - pa.fit_residual),
+                           pa.polarity, 0});
+        }
+      }
+    }
+    if (!dense.empty()) candidates.swap(dense);
   }
   if (params.model_point_sampling == "magnitude") {
     std::stable_sort(candidates.begin(), candidates.end(), [](const EdgePoint& a, const EdgePoint& b) {
@@ -189,13 +247,15 @@ ShapeModel ShapeModelBuilder::create(const ImageView& image, const ShapeModelPar
       return a.magnitude > b.magnitude;
     });
   }
-  const float min_dist2 = static_cast<float>(params.min_point_distance * params.min_point_distance);
+  const double point_spacing = high_precision ? params.high_precision_point_spacing
+                                               : params.min_point_distance;
+  const double min_dist2 = point_spacing * point_spacing;
   std::vector<EdgePoint> selected;
   selected.reserve(std::min(params.max_model_points, candidates.size()));
   for (const auto& c : candidates) {
     bool far_enough = true;
     for (const auto& s : selected) {
-      const float dx = c.x - s.x, dy = c.y - s.y;
+      const double dx = c.x - s.x, dy = c.y - s.y;
       if (dx * dx + dy * dy < min_dist2) { far_enough = false; break; }
     }
     if (far_enough) selected.push_back(c);
@@ -204,7 +264,7 @@ ShapeModel ShapeModelBuilder::create(const ImageView& image, const ShapeModelPar
   if (selected.size() < params.min_model_points)
     throw InvalidModel("template contains fewer than min_model_points valid edge points");
 
-  float max_mag = 0;
+  double max_mag = 0;
   for (const auto& p : selected) max_mag = std::max(max_mag, p.magnitude);
   ShapeModel model;
   model.roi_ = roi; model.origin_ = origin; model.version_ = params.model_version; model.params_ = params;
@@ -212,8 +272,10 @@ ShapeModel ShapeModelBuilder::create(const ImageView& image, const ShapeModelPar
   for (const auto& p : selected) {
     const float point_weight = params.model_point_sampling == "uniform"
         ? 1.0f : (max_mag > 0 ? p.magnitude / max_mag : 0.f);
-    model.points_.push_back({p.x - origin.x, p.y - origin.y, p.orientation,
-                             point_weight, 0});
+    model.points_.push_back({static_cast<float>(p.x - origin.x),
+                             static_cast<float>(p.y - origin.y),
+                             static_cast<float>(p.orientation), point_weight, 0,
+                             p.fit_residual, p.polarity, p.region});
   }
   model.levels_ = ModelPyramid::build(model, params.num_levels).levels();
   model.levels_soa_.reserve(model.levels_.size());
@@ -224,11 +286,17 @@ ShapeModel ShapeModelBuilder::create(const ImageView& image, const ShapeModelPar
     soa.relative_y.reserve(level_points.size());
     soa.orientation.reserve(level_points.size());
     soa.weight.reserve(level_points.size());
+    soa.fit_residual.reserve(level_points.size());
+    soa.polarity.reserve(level_points.size());
+    soa.region.reserve(level_points.size());
     for (const auto& point : level_points) {
       soa.relative_x.push_back(point.relative_x);
       soa.relative_y.push_back(point.relative_y);
       soa.orientation.push_back(point.orientation);
       soa.weight.push_back(point.weight);
+      soa.fit_residual.push_back(static_cast<float>(point.fit_residual));
+      soa.polarity.push_back(point.polarity);
+      soa.region.push_back(point.region);
     }
     model.levels_soa_.push_back(std::move(soa));
   }

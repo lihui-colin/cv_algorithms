@@ -23,6 +23,10 @@ void ShapeModelParams::validate() const {
     throw InvalidArgument("minimum distances and magnitudes must be non-negative");
   if (num_levels < 0) throw InvalidArgument("num_levels cannot be negative");
   if (model_version <= 0) throw InvalidArgument("model_version must be positive");
+  if (!std::isfinite(high_precision_point_spacing) || high_precision_point_spacing <= 0)
+    throw InvalidArgument("high_precision_point_spacing must be positive and finite");
+  if (!std::isfinite(max_fit_residual) || max_fit_residual < 0)
+    throw InvalidArgument("max_fit_residual must be finite and non-negative");
   if (model_point_sampling != "uniform" && model_point_sampling != "magnitude")
     throw InvalidArgument("model_point_sampling must be uniform or magnitude");
 }
@@ -58,6 +62,16 @@ void SearchParams::validate() const {
       !std::isfinite(refinement_angle_tolerance) || refinement_angle_tolerance <= 0 ||
       !std::isfinite(refinement_scale_tolerance) || refinement_scale_tolerance <= 0)
     throw InvalidArgument("refinement tolerances must be positive and finite");
+  if (!std::isfinite(level_min_score_factor) || level_min_score_factor < 0 ||
+      level_min_score_factor > 1 || !std::isfinite(exhaustive_translation_step) ||
+      exhaustive_translation_step <= 0 || !std::isfinite(exhaustive_final_translation_step) ||
+      exhaustive_final_translation_step <= 0)
+    throw InvalidArgument("invalid exhaustive search step parameters");
+  if (!std::isfinite(min_region_coverage) || min_region_coverage < 0 || min_region_coverage > 1 ||
+      !std::isfinite(max_mean_edge_distance) || max_mean_edge_distance < 0 ||
+      !std::isfinite(min_orientation_consistency) || min_orientation_consistency < 0 ||
+      min_orientation_consistency > 1)
+    throw InvalidArgument("invalid exhaustive validation thresholds");
 }
 
 void SearchParams::enable_fast_pipeline() {

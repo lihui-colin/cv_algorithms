@@ -12,6 +12,9 @@ struct ModelLevelSoA {
   std::vector<float> relative_y;
   std::vector<float> orientation;
   std::vector<float> weight;
+  std::vector<float> fit_residual;
+  std::vector<int> polarity;
+  std::vector<int> region;
   int level = 0;
 
   std::size_t size() const { return relative_x.size(); }
@@ -20,7 +23,7 @@ struct ModelLevelSoA {
 
 class ShapeModel {
 public:
-  static constexpr int current_version = 1;
+  static constexpr int current_version = 2;
   ShapeModel() = default;
   const std::vector<ModelPoint>& points() const { return points_; }
   const std::vector<std::vector<ModelPoint>>& levels() const { return levels_; }

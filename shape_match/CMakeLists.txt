@@ -31,6 +31,7 @@ add_library(openshape_match
     src/model/shape_model.cpp
     src/pyramid/pyramid.cpp
     src/matcher/matcher.cpp
+    src/matcher/exhaustive_matcher.cpp
 )
 add_library(openshape::OpenShapeMatch ALIAS openshape_match)
 target_include_directories(openshape_match PUBLIC

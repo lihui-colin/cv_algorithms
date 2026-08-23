@@ -5,3 +5,4 @@
 #include "openshape/model/shape_model.hpp"
 #include "openshape/pyramid/pyramid.hpp"
 #include "openshape/matcher/matcher.hpp"
+#include "openshape/matcher/exhaustive_matcher.hpp"

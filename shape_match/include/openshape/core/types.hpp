@@ -48,16 +48,24 @@ private:
 };
 
 struct EdgePoint {
-  float x = 0, y = 0;
-  float magnitude = 0;
-  float orientation = 0;
+  double x = 0, y = 0;
+  double magnitude = 0;
+  double orientation = 0;
+  double fit_residual = 0;
+  int polarity = 0;
+  int region = 0;
 };
 
 struct ModelPoint {
+  // The historical fields remain source-compatible, but are now populated
+  // from the fitted (rather than integer-pixel) contour location.
   float relative_x = 0, relative_y = 0;
   float orientation = 0;
   float weight = 0;
   int level = 0;
+  double fit_residual = 0;
+  int polarity = 0;
+  int region = 0;
 };
 
 // Gradient-polarity policy used by the high-accuracy matcher.  The historical
@@ -87,6 +95,11 @@ struct ShapeModelParams {
   int num_levels = 0;
   std::string model_point_sampling = "uniform";
   int model_version = 1;
+  // Version 2 enables the correctness-first fitted contour model.  It is
+  // deliberately opt-in so existing serialized models and fast searches keep
+  // their historical behavior.
+  double high_precision_point_spacing = 0.25;
+  double max_fit_residual = 0.35;
   void validate() const;
 };
 
@@ -140,6 +153,17 @@ struct SearchParams {
   double min_visible_fraction = 0.25;
   // Soft-edge falloff in pixels for continuous scoring.
   double edge_distance_sigma = 1.0;
+  // Parameters used by the exhaustive reference matcher.  A zero value keeps
+  // the legacy matcher behavior; the exhaustive entry point supplies its own
+  // conservative defaults.
+  double level_min_score_factor = 0.25;
+  double exhaustive_translation_step = 1.0;
+  double exhaustive_final_translation_step = 1.0 / 120.0;
+  double exhaustive_angle_step = 0.0;
+  double exhaustive_scale_step = 0.0;
+  double min_region_coverage = 0.0;
+  double max_mean_edge_distance = 0.0;
+  double min_orientation_consistency = 0.0;
   int max_refinement_iterations = 12;
   double refinement_position_tolerance = 1e-3;
   double refinement_angle_tolerance = 1e-3;
@@ -179,7 +203,14 @@ struct SearchStats {
   std::size_t peak_input_candidates = 0;
   std::size_t peak_output_candidates = 0;
   std::size_t refinement_input_candidates = 0;
+  std::size_t safe_bound_terminations = 0;
+  std::size_t score_bound_terminations = 0;
+  std::size_t visible_bound_terminations = 0;
+  std::size_t bound_terminated_point_evaluations = 0;
+  double max_termination_upper_bound = 0.0;
 };
+
+enum class MatchStatus { Accepted, Rejected, Ambiguous };
 
 struct Pose { float column = 0, row = 0, angle = 0, scale = 1; };
 
@@ -192,6 +223,13 @@ struct MatchResult {
   double residual = 1.0;
   double confidence = 0.0;
   double valid_point_fraction = 0.0;
+  double mean_edge_distance = 0.0;
+  double max_edge_distance = 0.0;
+  double orientation_consistency = 0.0;
+  double polarity_consistency = 0.0;
+  double region_coverage = 0.0;
+  double position_error_bound = 0.0;
+  MatchStatus status = MatchStatus::Accepted;
 };
 
 }
