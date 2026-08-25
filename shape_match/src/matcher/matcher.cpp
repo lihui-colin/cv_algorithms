@@ -128,11 +128,16 @@ struct SearchTransform {
 struct TransformedModelPoints {
   std::vector<float> relative_x;
   std::vector<float> relative_y;
+  std::vector<cv::Point> rounded_relative;
   std::vector<float> orientation;
   std::vector<float> remaining_weight;
   const std::vector<float>* weight = nullptr;
   double total_weight = 0.0;
   PointBounds bounds;
+  int support_min_x = 0;
+  int support_min_y = 0;
+  int support_max_x = 0;
+  int support_max_y = 0;
 
   std::size_t size() const { return relative_x.size(); }
 };
@@ -140,16 +145,29 @@ struct TransformedModelPoints {
 struct PrefilterResult {
   bool passes = true;
   bool integral_rejected = false;
+  std::size_t point_evaluations = 0;
 };
+
+struct PrefilterHit {
+  std::uint32_t point_index = 0;
+  int x = 0;
+  int y = 0;
+};
+
+double polarity_similarity(float dot, PolarityMode polarity);
 
 TransformedModelPoints transform_model_points(const ModelLevelSoA& points,
                                               double angle_degrees, double scale,
-                                              std::size_t point_count) {
+                                              std::size_t point_count,
+                                              bool prepare_integer_offsets = false) {
   TransformedModelPoints transformed;
   transformed.weight = &points.weight;
   point_count = std::min(point_count, points.size());
   transformed.relative_x.resize(point_count);
   transformed.relative_y.resize(point_count);
+  if (prepare_integer_offsets) {
+    transformed.rounded_relative.resize(point_count);
+  }
   transformed.orientation.resize(point_count);
   transformed.remaining_weight.resize(point_count);
   if (point_count == 0) return transformed;
@@ -168,6 +186,11 @@ TransformedModelPoints transform_model_points(const ModelLevelSoA& points,
         (s * points.relative_x[index] + c * points.relative_y[index]);
     transformed.relative_x[index] = x;
     transformed.relative_y[index] = y;
+    if (prepare_integer_offsets) {
+      transformed.rounded_relative[index] = cv::Point(
+          static_cast<int>(std::lround(x)),
+          static_cast<int>(std::lround(y)));
+    }
     transformed.orientation[index] = points.orientation[index] + angle;
     remaining_weight -= std::max(0.0f, points.weight[index]);
     transformed.remaining_weight[index] = static_cast<float>(remaining_weight);
@@ -181,7 +204,33 @@ TransformedModelPoints transform_model_points(const ModelLevelSoA& points,
       transformed.bounds.max_y = std::max(transformed.bounds.max_y, y);
     }
   }
+  if (prepare_integer_offsets) {
+    transformed.support_min_x = static_cast<int>(
+        std::floor(transformed.bounds.min_x)) - 1;
+    transformed.support_min_y = static_cast<int>(
+        std::floor(transformed.bounds.min_y)) - 1;
+    transformed.support_max_x = static_cast<int>(
+        std::ceil(transformed.bounds.max_x)) + 1;
+    transformed.support_max_y = static_cast<int>(
+        std::ceil(transformed.bounds.max_y)) + 1;
+  }
   return transformed;
+}
+
+bool prepared_aabb_contains_edge(const EdgeMap& scene,
+                                 const TransformedModelPoints& points,
+                                 int column, int row) {
+  if (scene.edge_integral.empty()) return true;
+  const int x0 = std::max(0, column + points.support_min_x);
+  const int y0 = std::max(0, row + points.support_min_y);
+  const int x1 = std::min(scene.edges.cols - 1,
+                          column + points.support_max_x);
+  const int y1 = std::min(scene.edges.rows - 1,
+                          row + points.support_max_y);
+  if (x0 > x1 || y0 > y1) return false;
+  const int* top = scene.edge_integral.ptr<int>(y0);
+  const int* bottom = scene.edge_integral.ptr<int>(y1 + 1);
+  return bottom[x1 + 1] - bottom[x0] - top[x1 + 1] + top[x0] > 0;
 }
 
 bool aabb_contains_edge(const EdgeMap& scene, const PointBounds& bounds,
@@ -206,21 +255,103 @@ bool aabb_contains_edge(const EdgeMap& scene, const PointBounds& bounds,
 }
 
 PrefilterResult passes_valid_point_prefilter(const EdgeMap& scene, const TransformedModelPoints& points,
-                                             double column, double row, std::size_t required_valid) {
+                                             double column, double row, std::size_t required_valid,
+                                             PrefilterHit* hits = nullptr,
+                                             std::size_t hit_capacity = 0,
+                                             std::size_t* hit_count = nullptr,
+                                             double* hit_total_weight = nullptr) {
+  if (hit_count) *hit_count = 0;
+  if (hit_total_weight) *hit_total_weight = 0.0;
   if (required_valid == 0) return {};
-  if (!aabb_contains_edge(scene, points.bounds, column, row)) return {false, true};
+  const bool integer_origin = points.rounded_relative.size() == points.size() &&
+                              std::floor(column) == column &&
+                              std::floor(row) == row;
+  const int integer_column = static_cast<int>(column);
+  const int integer_row = static_cast<int>(row);
+  if (!(integer_origin
+            ? prepared_aabb_contains_edge(
+                  scene, points, integer_column, integer_row)
+            : aabb_contains_edge(scene, points.bounds, column, row)))
+    return {false, true};
   std::size_t valid = 0;
   std::size_t remaining = points.size();
+  const unsigned char* edge_data = scene.edges.ptr<unsigned char>();
+  const std::size_t edge_step = scene.edges.step1();
   for (std::size_t index = 0; index < points.size(); ++index) {
-    const int x = static_cast<int>(std::lround(column + points.relative_x[index]));
-    const int y = static_cast<int>(std::lround(row + points.relative_y[index]));
+    const int x = integer_origin
+        ? integer_column + points.rounded_relative[index].x
+        : static_cast<int>(std::lround(column + points.relative_x[index]));
+    const int y = integer_origin
+        ? integer_row + points.rounded_relative[index].y
+        : static_cast<int>(std::lround(row + points.relative_y[index]));
     if (x >= 0 && y >= 0 && x < scene.edges.cols && y < scene.edges.rows &&
-        scene.edges.at<unsigned char>(y, x) != 0)
+        edge_data[static_cast<std::size_t>(y) * edge_step +
+                  static_cast<std::size_t>(x)] != 0) {
+      if (hits && valid < hit_capacity)
+        hits[valid] = {static_cast<std::uint32_t>(index), x, y};
+      if (hit_total_weight)
+        *hit_total_weight += std::max(0.0f, (*points.weight)[index]);
       ++valid;
+    }
     --remaining;
-    if (valid + remaining < required_valid) return {false, false};
+    if (valid + remaining < required_valid)
+      return {false, false, index + 1};
   }
-  return {valid >= required_valid, false};
+  if (hit_count) *hit_count = valid;
+  return {valid >= required_valid, false, points.size()};
+}
+
+double score_prepared_prefilter_hits(const EdgeMap& scene,
+                                     const TransformedModelPoints& points,
+                                     const PrefilterHit* hits,
+                                     std::size_t hit_count,
+                                     PolarityMode polarity,
+                                     double total_weight,
+                                     double minimum_score,
+                                     double greediness,
+                                     std::size_t* point_evaluations,
+                                     bool* early_terminated) {
+  if (point_evaluations) *point_evaluations = 0;
+  if (early_terminated) *early_terminated = false;
+  if (hit_count == 0 || points.weight == nullptr || total_weight <= 0.0)
+    return 0.0;
+  double weighted = 0.0;
+  double inverted_weighted = 0.0;
+  double remaining_weight = total_weight;
+  const std::size_t bound_interval = std::max<std::size_t>(1,
+      static_cast<std::size_t>(std::lround(
+          1.0 + (1.0 - greediness) * 31.0)));
+  for (std::size_t hit_index = 0; hit_index < hit_count; ++hit_index) {
+    const auto& hit = hits[hit_index];
+    if (point_evaluations) ++*point_evaluations;
+    const double point_weight = (*points.weight)[hit.point_index];
+    remaining_weight -= std::max(0.0, point_weight);
+    const float image_orientation =
+        scene.orientation.ptr<float>(hit.y)[hit.x];
+    const float dot = std::cos(angle_diff(
+        points.orientation[hit.point_index], image_orientation));
+    if (polarity == PolarityMode::GlobalEither) {
+      weighted += point_weight * std::max(0.0f, dot);
+      inverted_weighted += point_weight * std::max(0.0f, -dot);
+    } else {
+      weighted += point_weight * polarity_similarity(dot, polarity);
+    }
+    const std::size_t remaining_hits = hit_count - hit_index - 1;
+    if (greediness > 0.0 &&
+        ((hit_index + 1) % bound_interval == 0 || remaining_hits == 0)) {
+      const double best_weighted = polarity == PolarityMode::GlobalEither
+          ? std::max(weighted, inverted_weighted) : weighted;
+      const double maximum_score =
+          (best_weighted + std::max(0.0, remaining_weight)) / total_weight;
+      if (maximum_score < minimum_score) {
+        if (early_terminated) *early_terminated = true;
+        return 0.0;
+      }
+    }
+  }
+  if (polarity == PolarityMode::GlobalEither)
+    weighted = std::max(weighted, inverted_weighted);
+  return std::clamp(weighted / total_weight, 0.0, 1.0);
 }
 
 double polarity_similarity(float dot, PolarityMode polarity) {
@@ -688,6 +819,18 @@ void merge_stats(SearchStats& destination, const SearchStats& source) {
   destination.parallel_search_wall_time_ms += source.parallel_search_wall_time_ms;
   destination.worker_score_cpu_time_ms += source.worker_score_cpu_time_ms;
   destination.worker_merge_sort_wall_time_ms += source.worker_merge_sort_wall_time_ms;
+  for (std::size_t index = 0; index < destination.pyramid_level_search_time_ms.size(); ++index)
+    destination.pyramid_level_search_time_ms[index] +=
+        source.pyramid_level_search_time_ms[index];
+  for (std::size_t index = 0; index < destination.pyramid_level_pose_evaluations.size(); ++index)
+    destination.pyramid_level_pose_evaluations[index] +=
+        source.pyramid_level_pose_evaluations[index];
+  for (std::size_t index = 0; index < destination.pyramid_level_score_point_evaluations.size(); ++index)
+    destination.pyramid_level_score_point_evaluations[index] +=
+        source.pyramid_level_score_point_evaluations[index];
+  for (std::size_t index = 0; index < destination.pyramid_level_prefilter_point_evaluations.size(); ++index)
+    destination.pyramid_level_prefilter_point_evaluations[index] +=
+        source.pyramid_level_prefilter_point_evaluations[index];
   destination.actual_worker_count = std::max(destination.actual_worker_count,
                                              source.actual_worker_count);
   destination.worker_count = std::max(destination.worker_count, source.worker_count);
@@ -880,14 +1023,16 @@ std::vector<MatchResult> find_shape_models_pyramid_precise(
   discovery.enable_candidate_clustering = true;
   const std::size_t angle_count = static_cast<std::size_t>(std::floor(
       params.angle_extent / params.angle_step + 1e-9)) + 1;
-  const std::size_t scale_count = static_cast<std::size_t>(std::floor(
-      (params.scale_max - params.scale_min) / params.scale_step + 1e-9)) + 1;
   const std::size_t coarsest_angle_stride = std::size_t{1} <<
       std::min(discovery.num_levels - 1, 3);
   const std::size_t coarse_angle_count =
       (angle_count + coarsest_angle_stride - 1) / coarsest_angle_stride;
-  const std::size_t coarse_transform_count = coarse_angle_count * scale_count;
-  const std::size_t fine_transform_count = angle_count * scale_count;
+  // Candidate budgets are spatial/pose budgets, not one budget per
+  // angle-scale transform. Multiplying them by the number of scales causes
+  // the 0.8-1.2 grid to inflate every refinement level even though only a
+  // bounded set of scale variants is needed per surviving spatial peak.
+  const std::size_t coarse_transform_count = coarse_angle_count;
+  const std::size_t fine_transform_count = angle_count;
   discovery.coarse_candidate_limit = std::max<std::size_t>(
       params.coarse_candidate_limit,
       std::max(coarse_transform_count * 3,
@@ -1237,8 +1382,9 @@ std::vector<MatchResult> find_shape_models(const EdgePyramid& scene, const Shape
     active_count = std::min(level_points.size(), std::max<std::size_t>(
         std::min<std::size_t>(64, level_points.size()), active_count));
     for (const auto& transform : transforms)
-      prepared_transforms.push_back(
-          transform_model_points(level_points, transform.angle, transform.scale, active_count));
+      prepared_transforms.push_back(transform_model_points(
+          level_points, transform.angle, transform.scale, active_count,
+          level == levels - 1));
   }
   if (stats) {
     stats->transform_preparation_time_ms = std::chrono::duration<double, std::milli>(
@@ -1255,6 +1401,14 @@ std::vector<MatchResult> find_shape_models(const EdgePyramid& scene, const Shape
   const auto angle_stride_for_level = [&](int level) -> std::size_t {
     if (!params.enable_pyramid_candidate_search) return 1;
     return std::size_t{1} << std::min(level, 3);
+  };
+  // Scale hypotheses are sampled sparsely at the global/coarsest level and
+  // expanded around surviving candidates during refinement. This keeps the
+  // full configured scale grid available without evaluating every scale at
+  // every image location.
+  const auto scale_stride_for_level = [&](int level) -> std::size_t {
+    if (!params.enable_pyramid_candidate_search || scales.size() <= 1) return 1;
+    return std::size_t{1} << std::min(level, 2);
   };
   struct PyramidJob {
     double x = 0.0;
@@ -1281,16 +1435,52 @@ std::vector<MatchResult> find_shape_models(const EdgePyramid& scene, const Shape
     }
   };
   for (int level = levels - 1; level >= 0; --level) {
+    const auto level_begin = std::chrono::steady_clock::now();
     const float pyramid_scale = std::ldexp(1.0f, -level);
     const auto& prepared_transforms = prepared_levels[static_cast<std::size_t>(level)];
     const EdgeMap& current = scene_levels[static_cast<std::size_t>(level)];
+    PointBounds scale_independent_bounds;
+    bool have_scale_independent_bounds = false;
+    if (level == levels - 1 && params.enable_coarse_prefilter && scales.size() > 1 &&
+        !prepared_transforms.empty()) {
+      // Union all angle/scale AABBs once. This conservative support window is
+      // shared by every scale at a translation and can reject blank regions
+      // before any scale-specific prefilter or score is entered.
+      for (const auto& prepared : prepared_transforms) {
+        if (!have_scale_independent_bounds) {
+          scale_independent_bounds = prepared.bounds;
+          have_scale_independent_bounds = true;
+        } else {
+          scale_independent_bounds.min_x = std::min(
+              scale_independent_bounds.min_x, prepared.bounds.min_x);
+          scale_independent_bounds.min_y = std::min(
+              scale_independent_bounds.min_y, prepared.bounds.min_y);
+          scale_independent_bounds.max_x = std::max(
+              scale_independent_bounds.max_x, prepared.bounds.max_x);
+          scale_independent_bounds.max_y = std::max(
+              scale_independent_bounds.max_y, prepared.bounds.max_y);
+        }
+      }
+    }
     std::vector<MatchResult> next;
     auto evaluate = [&](std::vector<MatchResult>& output, SearchStats* local_stats,
                         double base_x, double base_y, std::size_t transform_index) {
       const auto& prepared_points = prepared_transforms[transform_index];
       const auto& transform = transforms[transform_index];
-      if (local_stats) ++local_stats->pose_evaluations;
+      if (local_stats) {
+        ++local_stats->pose_evaluations;
+        ++local_stats->pyramid_level_pose_evaluations[static_cast<std::size_t>(level)];
+      }
       std::size_t valid = 0;
+      // The fitted models used by the fast pyramid path retain at most a few
+      // hundred points at the coarsest level. Larger custom models safely
+      // fall back to the existing scorer instead of growing every hot stack
+      // frame to the public maximum model size.
+      constexpr std::size_t kCoarsePrefilterHitCapacity = 256;
+      std::array<PrefilterHit, kCoarsePrefilterHitCapacity> prefilter_hits;
+      std::size_t prefilter_hit_count = 0;
+      double prefilter_hit_total_weight = 0.0;
+      bool reuse_prefilter_hits = false;
       const double threshold = level > 0 ? params.min_score * 0.5 : params.min_score;
       const std::size_t required_valid = std::max<std::size_t>(
           1, static_cast<std::size_t>(
@@ -1301,12 +1491,24 @@ std::vector<MatchResult> find_shape_models(const EdgePyramid& scene, const Shape
         if (local_stats) {
           const auto prefilter_begin = std::chrono::steady_clock::now();
           prefilter = passes_valid_point_prefilter(
-              current, prepared_points, base_x * pyramid_scale, base_y * pyramid_scale, required_valid);
+              current, prepared_points, base_x * pyramid_scale,
+              base_y * pyramid_scale, required_valid,
+              prepared_points.size() <= kCoarsePrefilterHitCapacity
+                  ? prefilter_hits.data() : nullptr,
+              kCoarsePrefilterHitCapacity, &prefilter_hit_count,
+              &prefilter_hit_total_weight);
           local_stats->prefilter_cpu_time_ms += std::chrono::duration<double, std::milli>(
               std::chrono::steady_clock::now() - prefilter_begin).count();
+          local_stats->pyramid_level_prefilter_point_evaluations[
+              static_cast<std::size_t>(level)] += prefilter.point_evaluations;
         } else {
           prefilter = passes_valid_point_prefilter(
-              current, prepared_points, base_x * pyramid_scale, base_y * pyramid_scale, required_valid);
+              current, prepared_points, base_x * pyramid_scale,
+              base_y * pyramid_scale, required_valid,
+              prepared_points.size() <= kCoarsePrefilterHitCapacity
+                  ? prefilter_hits.data() : nullptr,
+              kCoarsePrefilterHitCapacity, &prefilter_hit_count,
+              &prefilter_hit_total_weight);
         }
         if (!prefilter.passes) {
           if (local_stats) {
@@ -1315,6 +1517,8 @@ std::vector<MatchResult> find_shape_models(const EdgePyramid& scene, const Shape
           }
           return;
         }
+        reuse_prefilter_hits = prepared_points.size() <=
+            kCoarsePrefilterHitCapacity;
       }
       if (local_stats) ++local_stats->full_score_evaluations;
       double score = 0.0;
@@ -1322,21 +1526,43 @@ std::vector<MatchResult> find_shape_models(const EdgePyramid& scene, const Shape
       bool early_terminated = false;
       if (local_stats) {
         const auto score_begin = std::chrono::steady_clock::now();
-        score = score_prepared_pose(
-            current, prepared_points, base_x * pyramid_scale, base_y * pyramid_scale,
-            params.polarity, threshold, required_valid,
-            strict_detection ? 0.0 : params.greediness,
-            &valid, &score_points, &early_terminated);
+        if (reuse_prefilter_hits) {
+          valid = prefilter_hit_count;
+          score = score_prepared_prefilter_hits(
+              current, prepared_points, prefilter_hits.data(),
+              prefilter_hit_count, params.polarity,
+              prefilter_hit_total_weight, threshold,
+              strict_detection ? 0.0 : params.greediness,
+              &score_points, &early_terminated);
+        } else {
+          score = score_prepared_pose(
+              current, prepared_points, base_x * pyramid_scale, base_y * pyramid_scale,
+              params.polarity, threshold, required_valid,
+              strict_detection ? 0.0 : params.greediness,
+              &valid, &score_points, &early_terminated);
+        }
         local_stats->score_cpu_time_ms += std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - score_begin).count();
+              std::chrono::steady_clock::now() - score_begin).count();
         local_stats->score_point_evaluations += score_points;
+        local_stats->pyramid_level_score_point_evaluations[
+            static_cast<std::size_t>(level)] += score_points;
         if (early_terminated) ++local_stats->greediness_early_terminations;
       } else {
-        score = score_prepared_pose(
-            current, prepared_points, base_x * pyramid_scale, base_y * pyramid_scale,
-            params.polarity, threshold, required_valid,
-            strict_detection ? 0.0 : params.greediness,
-            &valid, nullptr, nullptr);
+        if (reuse_prefilter_hits) {
+          valid = prefilter_hit_count;
+          score = score_prepared_prefilter_hits(
+              current, prepared_points, prefilter_hits.data(),
+              prefilter_hit_count, params.polarity,
+              prefilter_hit_total_weight, threshold,
+              strict_detection ? 0.0 : params.greediness,
+              nullptr, nullptr);
+        } else {
+          score = score_prepared_pose(
+              current, prepared_points, base_x * pyramid_scale, base_y * pyramid_scale,
+              params.polarity, threshold, required_valid,
+              strict_detection ? 0.0 : params.greediness,
+              &valid, nullptr, nullptr);
+        }
       }
       if (valid < required_valid || score < threshold) return;
       MatchResult r;
@@ -1360,15 +1586,44 @@ std::vector<MatchResult> find_shape_models(const EdgePyramid& scene, const Shape
       const int max_x = static_cast<int>(std::ceil((roi.x + roi.width) * pyramid_scale));
       const int max_y = static_cast<int>(std::ceil((roi.y + roi.height) * pyramid_scale));
       const std::size_t row_count = static_cast<std::size_t>(std::max(0, max_y - min_y));
+      const std::size_t column_count = static_cast<std::size_t>(std::max(0, max_x - min_x));
+      std::vector<unsigned char> scale_independent_support;
+      if (have_scale_independent_bounds && row_count > 0 && column_count > 0) {
+        // Cache the integral-image query once per translation. All sampled
+        // scales at this location share this conservative support decision.
+        scale_independent_support.assign(row_count * column_count, 0);
+        for (std::size_t row_index = 0; row_index < row_count; ++row_index) {
+          const int y = min_y + static_cast<int>(row_index);
+          for (std::size_t column_index = 0; column_index < column_count; ++column_index) {
+            const int x = min_x + static_cast<int>(column_index);
+            scale_independent_support[row_index * column_count + column_index] =
+                static_cast<unsigned char>(aabb_contains_edge(
+                    current, scale_independent_bounds, x, y));
+          }
+        }
+      }
       std::vector<std::size_t> coarse_transforms;
       const std::size_t angle_stride = angle_stride_for_level(level);
+      const std::size_t scale_stride = scale_stride_for_level(level);
       for (std::size_t angle_index = 0; angle_index < angles.size();
            angle_index += angle_stride)
-        for (std::size_t scale_index = 0; scale_index < scales.size(); ++scale_index)
+        for (std::size_t scale_index = 0; scale_index < scales.size();
+             scale_index += scale_stride)
           coarse_transforms.push_back(angle_index * scales.size() + scale_index);
+      if (!scales.empty() && (scales.size() - 1) % scale_stride != 0)
+        for (std::size_t scale_index = scales.size() - 1;
+             scale_index < scales.size(); scale_index = scales.size())
+          for (std::size_t angle_index = 0; angle_index < angles.size();
+               angle_index += angle_stride)
+            coarse_transforms.push_back(angle_index * scales.size() + scale_index);
       if (!angles.empty() && (angles.size() - 1) % angle_stride != 0)
-        for (std::size_t scale_index = 0; scale_index < scales.size(); ++scale_index)
+        for (std::size_t scale_index = 0; scale_index < scales.size();
+             scale_index += scale_stride)
           coarse_transforms.push_back((angles.size() - 1) * scales.size() + scale_index);
+      if (!angles.empty() && (angles.size() - 1) % angle_stride != 0 &&
+          !scales.empty() && (scales.size() - 1) % scale_stride != 0)
+        coarse_transforms.push_back((angles.size() - 1) * scales.size() +
+                                    (scales.size() - 1));
       const std::size_t job_count = coarse_transforms.size() * row_count;
       std::vector<std::vector<MatchResult>> worker_results;
       const std::size_t worker_count = params.num_threads > 0
@@ -1383,8 +1638,17 @@ std::vector<MatchResult> find_shape_models(const EdgePyramid& scene, const Shape
           const std::size_t transform_index = row_count == 0 ? 0 :
               coarse_transforms[job / row_count];
           const int y = min_y + static_cast<int>(row_count == 0 ? 0 : job % row_count);
-          for (int x = min_x; x < max_x; ++x)
-            evaluate(output, local_stats, x / pyramid_scale, y / pyramid_scale, transform_index);
+          for (int x = min_x; x < max_x; ++x) {
+            const std::size_t support_index =
+                row_count == 0 || column_count == 0
+                    ? 0
+                    : (static_cast<std::size_t>(y - min_y) * column_count +
+                       static_cast<std::size_t>(x - min_x));
+            if (scale_independent_support.empty() ||
+                scale_independent_support[support_index] != 0)
+              evaluate(output, local_stats, x / pyramid_scale, y / pyramid_scale,
+                       transform_index);
+          }
         }
       });
       for (auto& output : worker_results)
@@ -1401,12 +1665,13 @@ std::vector<MatchResult> find_shape_models(const EdgePyramid& scene, const Shape
       std::unordered_set<PyramidJobKey, PyramidJobHash> seen_jobs;
       seen_jobs.reserve(jobs.capacity());
       const std::size_t angle_stride = angle_stride_for_level(level);
+      const std::size_t scale_stride = scale_stride_for_level(level);
       for (const auto& previous : previous_candidates) {
         const std::size_t previous_transform =
             transform_index_for(previous.angle, previous.scale);
         const std::size_t previous_angle = scales.empty()
             ? 0 : previous_transform / scales.size();
-        const std::size_t scale_index = scales.empty()
+        const std::size_t previous_scale_index = scales.empty()
             ? 0 : previous_transform % scales.size();
         const int angle_offset_begin = params.enable_pyramid_candidate_search
             ? -1 : 0;
@@ -1420,20 +1685,34 @@ std::vector<MatchResult> find_shape_models(const EdgePyramid& scene, const Shape
                   static_cast<std::ptrdiff_t>(angle_stride);
           if (candidate_angle < 0 ||
               candidate_angle >= static_cast<std::ptrdiff_t>(angles.size())) continue;
-          const std::size_t transform_index =
-              static_cast<std::size_t>(candidate_angle) * scales.size() + scale_index;
-          for (int dy = -params.refinement_radius; dy <= params.refinement_radius; ++dy) {
-            for (int dx = -params.refinement_radius; dx <= params.refinement_radius; ++dx) {
-              if (params.enable_pyramid_candidate_search && params.max_overlap >= 1.0 &&
-                  params.refinement_radius == 1 && dx != 0 && dy != 0)
-                continue;
-              const double x = previous.column + dx * refinement_step;
-              const double y = previous.row + dy * refinement_step;
-              const PyramidJobKey key{static_cast<int>(std::lround(x)),
-                                      static_cast<int>(std::lround(y)),
-                                      transform_index};
-              if (seen_jobs.insert(key).second)
-                jobs.push_back({x, y, transform_index});
+          const int scale_offset_begin = params.enable_pyramid_candidate_search &&
+                  scales.size() > 1 && level == 0 ? -1 : 0;
+          const int scale_offset_end = params.enable_pyramid_candidate_search &&
+                scales.size() > 1 && level == 0 ? 1 : 0;
+          for (int scale_offset = scale_offset_begin;
+               scale_offset <= scale_offset_end; ++scale_offset) {
+            const std::ptrdiff_t candidate_scale =
+                static_cast<std::ptrdiff_t>(previous_scale_index) +
+                static_cast<std::ptrdiff_t>(scale_offset) *
+                    static_cast<std::ptrdiff_t>(scale_stride);
+            if (candidate_scale < 0 ||
+                candidate_scale >= static_cast<std::ptrdiff_t>(scales.size())) continue;
+            const std::size_t transform_index =
+                static_cast<std::size_t>(candidate_angle) * scales.size() +
+                static_cast<std::size_t>(candidate_scale);
+            for (int dy = -params.refinement_radius; dy <= params.refinement_radius; ++dy) {
+              for (int dx = -params.refinement_radius; dx <= params.refinement_radius; ++dx) {
+                if (params.enable_pyramid_candidate_search && params.max_overlap >= 1.0 &&
+                    params.refinement_radius == 1 && dx != 0 && dy != 0)
+                  continue;
+                const double x = previous.column + dx * refinement_step;
+                const double y = previous.row + dy * refinement_step;
+                const PyramidJobKey key{static_cast<int>(std::lround(x)),
+                                        static_cast<int>(std::lround(y)),
+                                        transform_index};
+                if (seen_jobs.insert(key).second)
+                  jobs.push_back({x, y, transform_index});
+              }
             }
           }
         }
@@ -1496,6 +1775,11 @@ std::vector<MatchResult> find_shape_models(const EdgePyramid& scene, const Shape
       }
     }
     candidates = std::move(next);
+    if (stats) {
+      stats->pyramid_level_search_time_ms[static_cast<std::size_t>(level)] +=
+          std::chrono::duration<double, std::milli>(
+              std::chrono::steady_clock::now() - level_begin).count();
+    }
   }
   if (stats) stats->candidate_search_time_ms =
       std::chrono::duration<double, std::milli>(

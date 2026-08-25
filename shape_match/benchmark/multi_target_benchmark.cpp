@@ -23,12 +23,13 @@ double percentile(std::vector<double> samples, double fraction) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  if (argc < 3 || argc > 4) {
+  if (argc < 3 || argc > 5) {
     std::cerr << "usage: " << argv[0]
-              << " TEMPLATE_IMAGE TARGET_IMAGE [ITERATIONS]\n";
+              << " TEMPLATE_IMAGE TARGET_IMAGE [ITERATIONS] [multiscale]\n";
     return 2;
   }
-  const int iterations = argc == 4 ? std::max(1, std::stoi(argv[3])) : 30;
+  const int iterations = argc >= 4 ? std::max(1, std::stoi(argv[3])) : 30;
+  const bool multiscale = argc == 5 && std::string(argv[4]) == "multiscale";
   const cv::Mat templ = cv::imread(argv[1], cv::IMREAD_GRAYSCALE);
   const cv::Mat image = cv::imread(argv[2], cv::IMREAD_GRAYSCALE);
   if (templ.empty() || image.empty()) {
@@ -52,12 +53,13 @@ int main(int argc, char** argv) {
   params.angle_start = -60.0;
   params.angle_extent = 120.0;
   params.angle_step = 0.5;
-  // Exercise the production multi-scale candidate path.  The grid contains
-  // 0.80, 0.85, ..., 1.20 (nine discrete scales) and is propagated through
-  // the scene/model pyramids before level-0 verification.
-  params.scale_min = 0.8;
-  params.scale_max = 1.2;
-  params.scale_step = 0.05;
+  if (multiscale) {
+    // Exercise the production multi-scale candidate path. The grid contains
+    // 0.80, 0.85, ..., 1.20 (nine discrete scales).
+    params.scale_min = 0.8;
+    params.scale_max = 1.2;
+    params.scale_step = 0.05;
+  }
   params.min_score = 0.45;
   params.level_min_score_factor = 0.25;
   params.num_matches = 8;
@@ -85,6 +87,7 @@ int main(int argc, char** argv) {
             << "iterations=" << iterations
             << " model_points=" << model.size()
             << " levels=" << model.levels().size()
+            << " scales=" << (multiscale ? "0.8:1.2:0.05" : "1.0")
             << " results=" << results.size()
             << " p50_ms=" << percentile(samples, 0.50)
             << " p95_ms=" << percentile(samples, 0.95)
@@ -93,8 +96,34 @@ int main(int argc, char** argv) {
             << " poses=" << stats.pose_evaluations
             << " score_points=" << stats.score_point_evaluations
             << " preprocessing_ms=" << stats.preprocessing_time_ms
+            << " transform_prep_ms=" << stats.transform_preparation_time_ms
             << " search_ms=" << stats.candidate_search_time_ms
+            << " prefilter_cpu_ms=" << stats.prefilter_cpu_time_ms
             << " score_cpu_ms=" << stats.score_cpu_time_ms
+            << " refinement_ms=" << stats.continuous_refinement_time_ms
+            << " nms_ms=" << stats.nms_time_ms
+            << " level_ms=" << stats.pyramid_level_search_time_ms[0] << ","
+            << stats.pyramid_level_search_time_ms[1] << ","
+            << stats.pyramid_level_search_time_ms[2] << ","
+            << stats.pyramid_level_search_time_ms[3] << ","
+            << stats.pyramid_level_search_time_ms[4]
+            << " level_poses=" << stats.pyramid_level_pose_evaluations[0] << ","
+            << stats.pyramid_level_pose_evaluations[1] << ","
+            << stats.pyramid_level_pose_evaluations[2] << ","
+            << stats.pyramid_level_pose_evaluations[3] << ","
+            << stats.pyramid_level_pose_evaluations[4]
+            << " level_score_points="
+            << stats.pyramid_level_score_point_evaluations[0] << ","
+            << stats.pyramid_level_score_point_evaluations[1] << ","
+            << stats.pyramid_level_score_point_evaluations[2] << ","
+            << stats.pyramid_level_score_point_evaluations[3] << ","
+            << stats.pyramid_level_score_point_evaluations[4]
+            << " level_prefilter_points="
+            << stats.pyramid_level_prefilter_point_evaluations[0] << ","
+            << stats.pyramid_level_prefilter_point_evaluations[1] << ","
+            << stats.pyramid_level_prefilter_point_evaluations[2] << ","
+            << stats.pyramid_level_prefilter_point_evaluations[3] << ","
+            << stats.pyramid_level_prefilter_point_evaluations[4]
             << " full_scores=" << stats.full_score_evaluations
             << " nms_input=" << stats.nms_input_candidates << '\n';
   for (std::size_t index = 0; index < results.size(); ++index) {

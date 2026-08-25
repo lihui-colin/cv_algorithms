@@ -151,6 +151,12 @@ pattern grid. Neighboring angle hypotheses are restored as candidates move to
 finer levels, ending at the configured finest angular resolution. Spatial,
 angle, and scale jobs are deduplicated before parallel scoring.
 
+When multiple scales are configured, the coarsest level samples the scale
+range sparsely (including both endpoints), then expands only the scales around
+surviving spatial candidates. Candidate budgets are shared across transforms,
+so adding nine scales does not multiply the full-resolution candidate budget
+by nine.
+
 To search targets whose size may vary, configure the discrete scale grid
 explicitly. For example, the standard 0.8--1.2 range uses nine candidates:
 

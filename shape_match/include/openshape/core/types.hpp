@@ -1,6 +1,7 @@
 #pragma once
 #include <opencv2/core.hpp>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -225,6 +226,15 @@ struct SearchStats {
   double continuous_refinement_time_ms = 0.0;
   double candidate_search_time_ms = 0.0;
   double nms_time_ms = 0.0;
+  // Wall-clock search time spent at each scene/model pyramid level. Index 0
+  // is the original resolution; unused entries remain zero.
+  std::array<double, 5> pyramid_level_search_time_ms{};
+  std::array<std::size_t, 5> pyramid_level_pose_evaluations{};
+  // Actual model-point visits made by the score kernel at each pyramid level.
+  // This is the meaningful work metric when coarse levels retain fewer points
+  // per pose than level zero.
+  std::array<std::size_t, 5> pyramid_level_score_point_evaluations{};
+  std::array<std::size_t, 5> pyramid_level_prefilter_point_evaluations{};
   std::size_t peak_candidate_count = 0;
   std::size_t refinement_evaluations = 0;
   std::size_t refinement_converged = 0;

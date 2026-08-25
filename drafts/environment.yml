@@ -1,0 +1,15 @@
+name: roma-template-py312
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  # CPU users can remove the next two lines and let pip install PyTorch.
+  - pytorch>=2.5.1
+  - torchvision
+  - pip:
+      - -e ./RoMa
+      - opencv-python
+
