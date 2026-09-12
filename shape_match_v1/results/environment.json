@@ -1,0 +1,15 @@
+{
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
+  "machine": "x86_64",
+  "os": "Linux-6.18.35-x86_64-with-glibc2.39",
+  "compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0",
+  "core_threads": 1,
+  "build_flags": "-std=c++17 -O3 -DNDEBUG (portable, no -march=native)",
+  "image_size": [
+    640,
+    480
+  ],
+  "num_models": 2,
+  "subpixel": "least_squares_very_high",
+  "min_score": 0.5
+}

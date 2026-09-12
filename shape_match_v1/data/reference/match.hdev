@@ -1,0 +1,119 @@
+* ------------------------------------------------------------------------------------------------
+* This example program searches for two types of objects simultaneously.
+* ------------------------------------------------------------------------------------------------
+* General configuration of HDevelop.
+dev_update_window ('off')
+* Image acquisition and window size.
+read_image (ModelImage, 'rings_and_nuts')
+OutputDirectory := 'C:/Users/hui.li/AppData/Local/Programs/MVTec/HALCON-24.11-Progress-Steady/examples/solution_guide/matching/multiple_models_output'
+write_image (ModelImage, 'png', 0, OutputDirectory + '/original')
+get_image_pointer1 (ModelImage, Pointer, Type, Width, Height)
+dev_close_window ()
+dev_open_window (0, 0, Width, Height, 'white', WindowHandle)
+dev_set_part (0, 0, Height - 1, Width - 1)
+dev_display (ModelImage)
+* Colors and other settings for the visualization.
+dev_set_color ('blue')
+dev_set_draw ('margin')
+dev_set_line_width (2)
+set_display_font (WindowHandle, 14, 'mono', 'true', 'false')
+disp_continue_message (WindowHandle, 'black', 'true')
+stop ()
+* -------------------  Start of the application  ----------------
+* Select the model objects.
+gen_circle (ModelROIRing, 121, 299, 55)
+gen_circle (ModelROINut, 324, 279, 52)
+reduce_domain (ModelImage, ModelROIRing, TemplateRingImage)
+crop_domain (TemplateRingImage, TemplateRingImageCropped)
+write_image (TemplateRingImageCropped, 'png', 0, OutputDirectory + '/template_ring')
+reduce_domain (ModelImage, ModelROINut, TemplateNutImage)
+crop_domain (TemplateNutImage, TemplateNutImageCropped)
+write_image (TemplateNutImageCropped, 'png', 0, OutputDirectory + '/template_nut')
+dev_display (ModelImage)
+dev_display (ModelROIRing)
+dev_display (ModelROINut)
+disp_continue_message (WindowHandle, 'black', 'true')
+stop ()
+* Step 1: Create and train the models.
+reduce_domain (ModelImage, ModelROIRing, ImageROIRing)
+create_generic_shape_model (ModelIDRing)
+set_generic_shape_model_param (ModelIDRing, 'model_identifier', 'ring')
+set_generic_shape_model_param (ModelIDRing, 'iso_scale_min', 0.8)
+set_generic_shape_model_param (ModelIDRing, 'iso_scale_max', 1.2)
+train_generic_shape_model (ImageROIRing, ModelIDRing)
+inspect_shape_model (ImageROIRing, PyramidImage, ModelRegionRing, 1, 30)
+get_generic_shape_model_object (ShapeModelRing, ModelIDRing, 'contours')
+count_obj (ShapeModelRing, NumContoursRing)
+dev_clear_window ()
+dev_display (ModelRegionRing)
+disp_continue_message (WindowHandle, 'black', 'true')
+stop ()
+reduce_domain (ModelImage, ModelROINut, ImageROINut)
+create_generic_shape_model (ModelIDNut)
+set_generic_shape_model_param (ModelIDNut, 'model_identifier', 'nut')
+set_generic_shape_model_param (ModelIDNut, 'iso_scale_min', 0.6)
+set_generic_shape_model_param (ModelIDNut, 'iso_scale_max', 1.4)
+train_generic_shape_model (ImageROINut, ModelIDNut)
+inspect_shape_model (ImageROINut, PyramidImage, ModelRegionNut, 1, 30)
+get_generic_shape_model_object (ShapeModelNut, ModelIDNut, 'contours')
+count_obj (ShapeModelNut, NumContoursNut)
+dev_display (ModelRegionNut)
+* Step 2: Save the relevant information in tuples.
+ModelIDs := [ModelIDRing,ModelIDNut]
+concat_obj (ShapeModelRing, ShapeModelNut, ShapeModels)
+StartContoursInTuple := [1,NumContoursRing + 1]
+NumContoursInTuple := [NumContoursRing,NumContoursNut]
+disp_continue_message (WindowHandle, 'black', 'true')
+stop ()
+read_image (SearchImage, 'rings_and_nuts')
+dev_display (SearchImage)
+* Step 3: Create two search ROIs (upper and lower part of the image).
+gen_rectangle1 (SearchROIRing, 110, 10, 130, Width - 10)
+gen_rectangle1 (SearchROINut, 315, 10, 335, Width - 10)
+* "add" the ROIs to the search image.
+concat_obj (SearchROIRing, SearchROINut, SearchROIs)
+dev_set_color ('blue')
+dev_display (SearchROIs)
+add_channels (SearchROIs, SearchImage, SearchImageReduced)
+disp_continue_message (WindowHandle, 'black', 'true')
+stop ()
+* Step 4: Find all objects.
+dev_display (SearchImage)
+dev_set_color ('cyan')
+set_generic_shape_model_param (ModelIDRing, 'angle_start', -rad(22.5))
+set_generic_shape_model_param (ModelIDRing, 'angle_end', rad(22.5))
+set_generic_shape_model_param (ModelIDNut, 'angle_start', -rad(30))
+set_generic_shape_model_param (ModelIDNut, 'angle_end', rad(60))
+find_generic_shape_model (SearchImageReduced, ModelIDs, MatchResultID, NumMatchResult)
+open_file (OutputDirectory + '/matching_results.csv', 'output', ResultFileHandle)
+fwrite_string (ResultFileHandle, 'index,model,row,column,angle_deg,scale_row,scale_column,score')
+fnew_line (ResultFileHandle)
+for i := 0 to NumMatchResult - 1 by 1
+    * Access the results, i.e., the XLD contours belonging to the model.
+    get_generic_shape_model_result (MatchResultID, i, 'model_identifier', Model)
+    get_generic_shape_model_result (MatchResultID, i, 'row', MatchRow)
+    get_generic_shape_model_result (MatchResultID, i, 'column', MatchColumn)
+    get_generic_shape_model_result (MatchResultID, i, 'angle', MatchAngle)
+    get_generic_shape_model_result (MatchResultID, i, 'scale_row', MatchScaleRow)
+    get_generic_shape_model_result (MatchResultID, i, 'scale_column', MatchScaleColumn)
+    get_generic_shape_model_result (MatchResultID, i, 'score', MatchScore)
+    ResultLine := i + ',' + Model + ',' + MatchRow$'.3f' + ',' + MatchColumn$'.3f' + ',' + deg(MatchAngle)$'.3f' + ',' + MatchScaleRow$'.5f' + ',' + MatchScaleColumn$'.5f' + ',' + MatchScore$'.5f'
+    fwrite_string (ResultFileHandle, ResultLine)
+    fnew_line (ResultFileHandle)
+    get_generic_shape_model_result_object (Objects, MatchResultID, i, 'contours')
+    dev_set_color ('yellow')
+    dev_display (Objects)
+    if (i < NumMatchResult - 1)
+        disp_continue_message (WindowHandle, 'black', 'true')
+        stop ()
+    else
+        disp_end_of_program_message (WindowHandle, 'black', 'true')
+    endif
+endfor
+close_file (ResultFileHandle)
+dump_window (WindowHandle, 'png', OutputDirectory + '/recognition_result.png')
+* -------------------  End of the application  -----------------
+* Clean up.
+dev_update_window ('on')
+clear_shape_model (ModelIDRing)
+clear_shape_model (ModelIDNut)

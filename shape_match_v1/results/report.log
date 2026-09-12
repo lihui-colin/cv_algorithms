@@ -1,0 +1,58 @@
+{
+  "platform": "Linux-6.18.35-x86_64-with-glibc2.39",
+  "synthetic": {
+    "total": 30,
+    "found": 30,
+    "position": {
+      "count": 30,
+      "rmse": 0.012606900713941343,
+      "mean": 0.011001432027753196,
+      "p95": 0.020698134518491902,
+      "max": 0.021334009597630176
+    },
+    "groups": {
+      "pose": {
+        "count": 10,
+        "rmse": 0.005971845248490766,
+        "mean": 0.0050837086518448526,
+        "p95": 0.011979112005617073,
+        "max": 0.011979112005617073
+      },
+      "translation": {
+        "count": 20,
+        "rmse": 0.014851580743503408,
+        "mean": 0.013960293715707369,
+        "p95": 0.020698134518491902,
+        "max": 0.021334009597630176
+      }
+    },
+    "target_rmse_px": 0.03333333333333333,
+    "passes_tested_rmse": true
+  },
+  "timing": {
+    "pyramid_ms": 46.420991,
+    "top_level_ms": 1103.149458,
+    "tracking_ms": 52.229979,
+    "refinement_ms": 8.522745,
+    "total_ms": 1210.393779,
+    "evaluated_poses": 2001893,
+    "coarse_candidates": 305,
+    "refined_candidates": 26
+  },
+  "halcon_runtime_comparison": "not executed; uploaded CSV only",
+  "repeated_benchmark": {
+    "iterations": 5,
+    "warmup": 1,
+    "threads": 1,
+    "median_ms": 1176.401335,
+    "min_ms": 1161.079872,
+    "max_ms": 1256.201599,
+    "samples_ms": [
+      1176.401335,
+      1162.905331,
+      1161.079872,
+      1256.201599,
+      1182.717182
+    ]
+  }
+}

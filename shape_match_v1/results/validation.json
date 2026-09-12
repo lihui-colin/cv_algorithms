@@ -1,0 +1,136 @@
+{
+  "platform": "Linux-6.18.35-x86_64-with-glibc2.39",
+  "sample": {
+    "expected": 7,
+    "detected": 7,
+    "associated": 7,
+    "unassociated": 0,
+    "comparisons": [
+      {
+        "reference_index": "0",
+        "prediction_index": "1",
+        "model": "nut",
+        "matched": true,
+        "position_difference_px": 0.00538516480717605,
+        "angle_difference_mod_symmetry_deg": 0.009000000028741795,
+        "scale_difference": -6.0000000364990314e-05,
+        "score_difference": 0.0007199959692730795
+      },
+      {
+        "reference_index": "1",
+        "prediction_index": "0",
+        "model": "ring",
+        "matched": true,
+        "position_difference_px": 0.006324612290367545,
+        "angle_difference_mod_symmetry_deg": 1.6030011096290764e-08,
+        "scale_difference": -7.9989161462235e-05,
+        "score_difference": 0.002859999896368093
+      },
+      {
+        "reference_index": "2",
+        "prediction_index": "2",
+        "model": "ring",
+        "matched": true,
+        "position_difference_px": 0.09168258670026748,
+        "angle_difference_mod_symmetry_deg": -0.17567913320394624,
+        "scale_difference": 0.005463644811740109,
+        "score_difference": -0.18507162190269555
+      },
+      {
+        "reference_index": "3",
+        "prediction_index": "4",
+        "model": "nut",
+        "matched": true,
+        "position_difference_px": 0.46073249765125845,
+        "angle_difference_mod_symmetry_deg": -0.16325284936574747,
+        "scale_difference": 0.0024908040371589557,
+        "score_difference": -0.3229003522583206
+      },
+      {
+        "reference_index": "4",
+        "prediction_index": "3",
+        "model": "nut",
+        "matched": true,
+        "position_difference_px": 0.790859706816222,
+        "angle_difference_mod_symmetry_deg": 0.1941117812346107,
+        "scale_difference": 0.0013638228662684604,
+        "score_difference": -0.28642843011394303
+      },
+      {
+        "reference_index": "5",
+        "prediction_index": "6",
+        "model": "ring",
+        "matched": true,
+        "position_difference_px": 0.1567869907097745,
+        "angle_difference_mod_symmetry_deg": -0.13899887536081224,
+        "scale_difference": -0.019403739211087512,
+        "score_difference": -0.4413733174640593
+      },
+      {
+        "reference_index": "6",
+        "prediction_index": "5",
+        "model": "nut",
+        "matched": true,
+        "position_difference_px": 0.22557193883564505,
+        "angle_difference_mod_symmetry_deg": -0.03783331373391263,
+        "scale_difference": -0.0006535158820669684,
+        "score_difference": -0.28014859598339203
+      }
+    ]
+  },
+  "synthetic": {
+    "total": 30,
+    "found": 30,
+    "position": {
+      "count": 30,
+      "rmse": 0.012606900713941343,
+      "mean": 0.011001432027753196,
+      "p95": 0.020698134518491902,
+      "max": 0.021334009597630176
+    },
+    "groups": {
+      "pose": {
+        "count": 10,
+        "rmse": 0.005971845248490766,
+        "mean": 0.0050837086518448526,
+        "p95": 0.011979112005617073,
+        "max": 0.011979112005617073
+      },
+      "translation": {
+        "count": 20,
+        "rmse": 0.014851580743503408,
+        "mean": 0.013960293715707369,
+        "p95": 0.020698134518491902,
+        "max": 0.021334009597630176
+      }
+    },
+    "target_rmse_px": 0.03333333333333333,
+    "passes_tested_rmse": true
+  },
+  "timing": {
+    "pyramid_ms": 46.420991,
+    "top_level_ms": 1103.149458,
+    "tracking_ms": 52.229979,
+    "refinement_ms": 8.522745,
+    "total_ms": 1210.393779,
+    "evaluated_poses": 2001893,
+    "coarse_candidates": 305,
+    "refined_candidates": 26
+  },
+  "halcon_runtime_comparison": "not executed; uploaded CSV only",
+  "repeated_benchmark": {
+    "iterations": 5,
+    "warmup": 1,
+    "threads": 1,
+    "median_ms": 1176.401335,
+    "min_ms": 1161.079872,
+    "max_ms": 1256.201599,
+    "samples_ms": [
+      1176.401335,
+      1162.905331,
+      1161.079872,
+      1256.201599,
+      1182.717182
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+# Optional: PNG input conversion and geometric report SVG generation only.
+Pillow>=10,<13
+# Optional scientific error plot (scripts/plot_accuracy.py).
+matplotlib>=3.8,<4
