@@ -1,0 +1,463 @@
+{
+  "reference": "data/reference/halcon_least_squares.csv",
+  "reference_sha256": "11a5bd4b118f952430ee1aac7e07404000a52f8500f4fb56d8a497ac77897a68",
+  "note": "Imported seeds diagnostic only; pre-filter selection uses highest reproduction score, not minimum GT error.",
+  "experiments": {
+    "seed-local-0": {
+      "budget": 0,
+      "filtered": {
+        "expected": 7,
+        "detected": 6,
+        "associated": 6,
+        "extra": 0,
+        "position_rmse_px": 0.2707433340577829,
+        "position_max_px": 0.6144127488354347
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.35778434288555006,
+        "position_max_px": 0.6754670491430125
+      }
+    },
+    "seed-local-1": {
+      "budget": 1,
+      "filtered": {
+        "expected": 7,
+        "detected": 6,
+        "associated": 6,
+        "extra": 0,
+        "position_rmse_px": 0.24539856213059782,
+        "position_max_px": 0.5000219751395986
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.26860990702447046,
+        "position_max_px": 0.5000219751395986
+      }
+    },
+    "seed-local-2": {
+      "budget": 2,
+      "filtered": {
+        "expected": 7,
+        "detected": 6,
+        "associated": 6,
+        "extra": 0,
+        "position_rmse_px": 0.23152670523550672,
+        "position_max_px": 0.48191672858076545
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.2559144381698468,
+        "position_max_px": 0.48191672858076545
+      }
+    },
+    "seed-local-3": {
+      "budget": 3,
+      "filtered": {
+        "expected": 7,
+        "detected": 6,
+        "associated": 6,
+        "extra": 0,
+        "position_rmse_px": 0.23502974899596263,
+        "position_max_px": 0.4812333224807724
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.2569989867363585,
+        "position_max_px": 0.4812333224807724
+      }
+    },
+    "seed-local-4": {
+      "budget": 4,
+      "filtered": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.2773031532969521,
+        "position_max_px": 0.5776762905649293
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.2773031532969521,
+        "position_max_px": 0.5776762905649293
+      }
+    },
+    "seed-local-8": {
+      "budget": 8,
+      "filtered": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.30033475412975513,
+        "position_max_px": 0.5788886131065167
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.30033475412975513,
+        "position_max_px": 0.5788886131065167
+      }
+    },
+    "seed-local-30": {
+      "budget": 30,
+      "filtered": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.30036588331321057,
+        "position_max_px": 0.5788886130190515
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.30036588331321057,
+        "position_max_px": 0.5788886130190515
+      }
+    },
+    "seed-halcon-0": {
+      "budget": 0,
+      "filtered": {
+        "expected": 7,
+        "detected": 3,
+        "associated": 3,
+        "extra": 0,
+        "position_rmse_px": 0.0455757816649432,
+        "position_max_px": 0.07526784155661952
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.606922429003533,
+        "position_max_px": 1.0616533042261114
+      }
+    },
+    "seed-halcon-1": {
+      "budget": 1,
+      "filtered": {
+        "expected": 7,
+        "detected": 5,
+        "associated": 5,
+        "extra": 0,
+        "position_rmse_px": 0.12286099071394126,
+        "position_max_px": 0.21043016655118169
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.18737347435453325,
+        "position_max_px": 0.40343694855984896
+      }
+    },
+    "seed-halcon-2": {
+      "budget": 2,
+      "filtered": {
+        "expected": 7,
+        "detected": 5,
+        "associated": 5,
+        "extra": 0,
+        "position_rmse_px": 0.22108011103607256,
+        "position_max_px": 0.46529854063170817
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.2540465079085585,
+        "position_max_px": 0.46529854063170817
+      }
+    },
+    "seed-halcon-3": {
+      "budget": 3,
+      "filtered": {
+        "expected": 7,
+        "detected": 6,
+        "associated": 6,
+        "extra": 0,
+        "position_rmse_px": 0.2580875243963889,
+        "position_max_px": 0.48032065842223937
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.2710618176793171,
+        "position_max_px": 0.48032065842223937
+      }
+    },
+    "seed-halcon-4": {
+      "budget": 4,
+      "filtered": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.28211761548095016,
+        "position_max_px": 0.5785913734267452
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.28211761548095016,
+        "position_max_px": 0.5785913734267452
+      }
+    },
+    "seed-halcon-8": {
+      "budget": 8,
+      "filtered": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.300365883311541,
+        "position_max_px": 0.5788886130190515
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.300365883311541,
+        "position_max_px": 0.5788886130190515
+      }
+    },
+    "seed-halcon-30": {
+      "budget": 30,
+      "filtered": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.300365883311541,
+        "position_max_px": 0.5788886130190515
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.300365883311541,
+        "position_max_px": 0.5788886130190515
+      }
+    },
+    "point-native-1": {
+      "budget": 1,
+      "filtered": {
+        "expected": 7,
+        "detected": 5,
+        "associated": 5,
+        "extra": 0,
+        "position_rmse_px": 0.27476228016600907,
+        "position_max_px": 0.5841796352517438
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.2727555014960114,
+        "position_max_px": 0.5841796352517438
+      }
+    },
+    "point-native-2": {
+      "budget": 2,
+      "filtered": {
+        "expected": 7,
+        "detected": 5,
+        "associated": 5,
+        "extra": 0,
+        "position_rmse_px": 0.26154015540584846,
+        "position_max_px": 0.5429425027141513
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.25002630365999806,
+        "position_max_px": 0.5429425027141513
+      }
+    },
+    "point-native-4": {
+      "budget": 4,
+      "filtered": {
+        "expected": 7,
+        "detected": 6,
+        "associated": 6,
+        "extra": 0,
+        "position_rmse_px": 0.24206313405549093,
+        "position_max_px": 0.5607977267350085
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.23967306953911752,
+        "position_max_px": 0.5607977267350085
+      }
+    },
+    "point-native-8": {
+      "budget": 8,
+      "filtered": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.2760484137808595,
+        "position_max_px": 0.5841182642065351
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.2760484137808595,
+        "position_max_px": 0.5841182642065351
+      }
+    },
+    "point-native-30": {
+      "budget": 30,
+      "filtered": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.30006344413211833,
+        "position_max_px": 0.5841182642065351
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.30006344413211833,
+        "position_max_px": 0.5841182642065351
+      }
+    },
+    "point-halcon-1": {
+      "budget": 1,
+      "filtered": {
+        "expected": 7,
+        "detected": 5,
+        "associated": 5,
+        "extra": 0,
+        "position_rmse_px": 0.29785576522607154,
+        "position_max_px": 0.5292321458082669
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.3408151911232918,
+        "position_max_px": 0.5837682441032012
+      }
+    },
+    "point-halcon-2": {
+      "budget": 2,
+      "filtered": {
+        "expected": 7,
+        "detected": 5,
+        "associated": 5,
+        "extra": 0,
+        "position_rmse_px": 0.15570025517236072,
+        "position_max_px": 0.32157826270091316
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.23476423053440573,
+        "position_max_px": 0.5021982459634388
+      }
+    },
+    "point-halcon-4": {
+      "budget": 4,
+      "filtered": {
+        "expected": 7,
+        "detected": 6,
+        "associated": 6,
+        "extra": 0,
+        "position_rmse_px": 0.2257091421389018,
+        "position_max_px": 0.4052381452795547
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.2111263153441427,
+        "position_max_px": 0.4052381452795547
+      }
+    },
+    "point-halcon-8": {
+      "budget": 8,
+      "filtered": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.28795254556837174,
+        "position_max_px": 0.5753194120423826
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.28795254556837174,
+        "position_max_px": 0.5753194120423826
+      }
+    },
+    "point-halcon-30": {
+      "budget": 30,
+      "filtered": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.29980265321692107,
+        "position_max_px": 0.5992476124477889
+      },
+      "before_score_filter": {
+        "expected": 7,
+        "detected": 7,
+        "associated": 7,
+        "extra": 0,
+        "position_rmse_px": 0.29980265321692107,
+        "position_max_px": 0.5992476124477889
+      }
+    }
+  }
+}

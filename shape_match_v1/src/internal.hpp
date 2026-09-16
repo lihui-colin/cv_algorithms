@@ -5,6 +5,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <numeric>
@@ -32,6 +33,10 @@ inline double Sq(double x) {
 inline double WrapAngle(double a) {
     return std::remainder(a, 2 * pi);
 }
+// Configuration is captured once; diagnostics and scratch allocations use the
+// same worker count as the process-wide executor.
+size_t SearchWorkerCount(size_t work_items);
+void ParallelFor(size_t work_items, const std::function<void(size_t, size_t, size_t)> &function);
 using Params = std::map<std::string, HValue>;
 double Number(const HValue &value);
 std::string String(const HValue &value);
@@ -76,6 +81,9 @@ struct EdgeFeature {
     int contour = -1;
 };
 using Features = std::vector<EdgeFeature>;
+struct Correspondence {
+    Vec model, image, normal;
+};
 struct GradientField {
     int width = 0, height = 0;
     std::vector<float> gx, gy, mag;
@@ -89,8 +97,15 @@ struct PyramidLevel {
     Image image;
     GradientField gradient;
     EdgeField field;
+    std::shared_ptr<const GradientField> precise_gradient;
 };
 using SearchPyramid = std::vector<PyramidLevel>;
+// Experimental continuous observations; never used by coarse candidate generation.
+std::vector<Correspondence> ContinuousCorrespondences(const Features &features,
+    const PyramidLevel &image, const Pose &pose, const std::string &metric,
+    double radius, const std::string &method);
+double RefinementSupportLoss(const std::vector<Correspondence> &pairs, const Pose &pose,
+                             size_t model_points, double radius);
 struct ModelLevel {
     Features features;
     double factor = 1;
@@ -99,6 +114,7 @@ struct TrainedData {
     Image image;
     Vec origin;
     Features dense;
+    Features gaussian_dense;
     ContourSet contours; // absolute template pixel-center coordinates
     std::vector<ModelLevel> levels;
     std::array<Vec, 4> rectangle{}; // min-area rectangle, relative to training origin
@@ -152,6 +168,8 @@ Image Smooth(const Image &image, double sigma);
 Image Downsample(const Image &image);
 /// P1/P2: 中心差分梯度及幅值；输入已经过平滑。
 GradientField ComputeGradients(const Image &image);
+GradientField GaussianGradients(const Image &image, double sigma = 0.8);
+Features GaussianModelFeatures(const Image &image, double low, double high, int min_size);
 /// P1/P2: 法线非极大值抑制、二次峰插值、连通滞后阈值。
 Features ExtractSubpixelContours(const Image &image, const GradientField &gradient, double low,
                                  double high, int min_size);
@@ -168,7 +186,7 @@ double RectangleOverlap(const Match &a, const Match &b);
 /// P1: 完整训练流程；失败时不覆盖上一次训练数据。
 std::shared_ptr<TrainedData> BuildModel(const Image &image, const Params &params);
 /// P2: 多模型共享搜索图金字塔；Domain 仅限制候选参考位置。
-SearchPyramid BuildSearchPyramid(const Image &image, int count, double contrast);
+SearchPyramid BuildSearchPyramid(const Image &image, int count, double contrast, bool precise = false);
 /// P2: 高斯距离衰减乘法线一致性，支持三种灰度极性语义和安全上界剪枝。
 double EvaluatePose(const Features &features, const EdgeField &field, const Pose &pose,
                     const std::string &metric, double sigma, double min_score = 0);
@@ -181,7 +199,7 @@ std::vector<Candidate> TrackToFinerLevel(const ModelSnapshot &model, const Searc
                                          SearchDiagnostics &diag);
 /// P3: 按 subpixel 分派量化/插值/最小二乘路径，重新计算最终得分。
 Candidate RefineInstance(const ModelSnapshot &model, const PyramidLevel &image,
-                         Candidate candidate);
+                         Candidate candidate, bool baseline_prepared = false);
 /// P3: 各自由度的局部二次得分峰插值，并限制非凹峰与步长。
 Pose InterpolateScorePeak(const ModelSnapshot &model, const PyramidLevel &image, Pose pose);
 /// P2/P3: 检查周期角度区间与等比尺度；容差用于非严格搜索细化。

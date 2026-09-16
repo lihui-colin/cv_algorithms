@@ -1,2 +1,4 @@
 /build/
 /build-*/
+shape_match_v1/build
+__pycache__

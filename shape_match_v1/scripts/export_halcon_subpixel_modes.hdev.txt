@@ -1,0 +1,57 @@
+* Paste into the ORIGINAL program after models/ranges/SearchImageReduced are ready.
+* Requires ModelIDs and SearchImageReduced from data/reference/match.hdev.
+* Use a NEW EXISTING output directory. Same-named files will be overwritten.
+* Not executed here: HALCON runtime is unavailable.
+ModeOutputDirectory := 'D:/new_halcon_subpixel_export'
+Modes := ['interpolation','least_squares','least_squares_high','least_squares_very_high']
+OriginalModes := []
+get_system ('file_version', Version)
+open_file (ModeOutputDirectory + '/actual_parameters.csv', 'output', PF)
+fwrite_string (PF, 'model,parameter,value')
+fnew_line (PF)
+for M := 0 to |ModelIDs|-1 by 1
+    get_generic_shape_model_param (ModelIDs[M], 'model_identifier', Name)
+    get_generic_shape_model_param (ModelIDs[M], 'subpixel', OriginalMode)
+    OriginalModes := [OriginalModes, OriginalMode]
+    fwrite_string (PF, Name + ',halcon_version,' + Version)
+    fnew_line (PF)
+    Params := ['subpixel','min_contrast','metric','origin_row','origin_column','iso_scale_min','iso_scale_max','iso_scale_step','restrict_iso_scale_min','restrict_iso_scale_max','angle_start','angle_end','angle_step','pyramid_level_lowest','pyramid_level_highest','max_deformation','strict_boundaries','min_score','num_matches']
+    for P := 0 to |Params|-1 by 1
+        get_generic_shape_model_param (ModelIDs[M], Params[P], Value)
+        tuple_type (Value, ValueType)
+        if (ValueType == 'string')
+            Text := Value
+        else
+            Text := Value$'.17g'
+        endif
+        fwrite_string (PF, Name + ',' + Params[P] + ',' + Text)
+        fnew_line (PF)
+    endfor
+endfor
+close_file (PF)
+for Mode := 0 to |Modes|-1 by 1
+    for M := 0 to |ModelIDs|-1 by 1
+        set_generic_shape_model_param (ModelIDs[M], 'subpixel', Modes[Mode])
+    endfor
+    * Preserve the ORIGINAL image, domains, model definitions and search settings.
+    find_generic_shape_model (SearchImageReduced, ModelIDs, ResultID, Count)
+    open_file (ModeOutputDirectory + '/halcon_' + Modes[Mode] + '.csv', 'output', F)
+    fwrite_string (F, 'index,model,row,column,angle_deg,scale_row,scale_column,score')
+    fnew_line (F)
+    for I := 0 to Count-1 by 1
+        get_generic_shape_model_result (ResultID, I, 'model_identifier', Name)
+        get_generic_shape_model_result (ResultID, I, 'row', Row)
+        get_generic_shape_model_result (ResultID, I, 'column', Column)
+        get_generic_shape_model_result (ResultID, I, 'angle', Angle)
+        get_generic_shape_model_result (ResultID, I, 'scale_row', SR)
+        get_generic_shape_model_result (ResultID, I, 'scale_column', SC)
+        get_generic_shape_model_result (ResultID, I, 'score', Score)
+        fwrite_string (F, I$'d' + ',' + Name + ',' + Row$'.17g' + ',' + Column$'.17g' + ',' + deg(Angle)$'.17g' + ',' + SR$'.17g' + ',' + SC$'.17g' + ',' + Score$'.17g')
+        fnew_line (F)
+    endfor
+    close_file (F)
+endfor
+* Restore original subpixel settings after successful completion.
+for M := 0 to |ModelIDs|-1 by 1
+    set_generic_shape_model_param (ModelIDs[M], 'subpixel', OriginalModes[M])
+endfor

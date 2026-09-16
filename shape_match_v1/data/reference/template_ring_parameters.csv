@@ -1,0 +1,8 @@
+parameter,actual_value,setting
+num_levels,4,auto
+contrast_low,8,auto
+contrast_high,16,auto
+min_size,4,auto
+optimization,none,auto
+metric,use_polarity,auto
+angle_step,0.0404089,auto

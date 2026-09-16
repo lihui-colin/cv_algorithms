@@ -1,5 +1,6 @@
 #include "shape_match/shape_match.hpp"
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -8,7 +9,7 @@
 using namespace shape_match;
 
 /// In-process warm-cache benchmark. Training and file I/O occur before timing.
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     try {
         const int iterations = argc > 1 ? std::stoi(argv[1]) : 5;
         if (iterations < 1 || iterations > 1000)
@@ -17,11 +18,15 @@ int main(int argc, char** argv) {
         HTuple ring, nut, result, count;
         CreateGenericShapeModel(&ring);
         CreateGenericShapeModel(&nut);
+        for (const auto &model : {ring, nut})
+            SetGenericShapeModelParam(model, {"refinement_method", "refinement_radius"},
+                                      {argc > 3 ? argv[3] : "nearest_point", argc > 4 ? std::stod(argv[4]) : 1.5});
         SetGenericShapeModelParam(ring, {"model_identifier", "iso_scale_min", "iso_scale_max"},
                                   {"ring", 0.8, 1.2});
         SetGenericShapeModelParam(nut, {"model_identifier", "iso_scale_min", "iso_scale_max"},
                                   {"nut", 0.6, 1.4});
-        TrainGenericShapeModel(ReadPgm("data/template_ring.pgm", "data/template_ring_mask.pgm"), ring);
+        TrainGenericShapeModel(ReadPgm("data/template_ring.pgm", "data/template_ring_mask.pgm"),
+                               ring);
         TrainGenericShapeModel(ReadPgm("data/template_nut.pgm", "data/template_nut_mask.pgm"), nut);
         constexpr double rad = 3.14159265358979323846 / 180;
         SetGenericShapeModelParam(ring, {"angle_start", "angle_end", "subpixel"},
@@ -40,15 +45,18 @@ int main(int argc, char** argv) {
         }
         auto ordered = elapsed;
         std::sort(ordered.begin(), ordered.end());
-        double median = ordered.size() % 2 ? ordered[ordered.size() / 2]
-                                          : (ordered[ordered.size() / 2 - 1] + ordered[ordered.size() / 2]) / 2;
+        double median = ordered.size() % 2
+                            ? ordered[ordered.size() / 2]
+                            : (ordered[ordered.size() / 2 - 1] + ordered[ordered.size() / 2]) / 2;
+        const double p95 =
+            ordered[std::min(ordered.size() - 1, size_t(std::ceil(ordered.size() * 0.95)) - 1)];
         std::ofstream out(output);
         if (!out)
             throw std::runtime_error("Cannot write benchmark JSON");
         out << std::setprecision(12) << "{\"iterations\":" << iterations
-            << ",\"warmup\":1,\"threads\":1,\"median_ms\":" << median
-            << ",\"min_ms\":" << ordered.front() << ",\"max_ms\":" << ordered.back()
-            << ",\"samples_ms\":[";
+            << ",\"warmup\":1,\"threads\":" << GetSearchThreadCount() << ",\"median_ms\":" << median
+            << ",\"p95_ms\":" << p95 << ",\"min_ms\":" << ordered.front()
+            << ",\"max_ms\":" << ordered.back() << ",\"samples_ms\":[";
         for (size_t i = 0; i < elapsed.size(); ++i) {
             if (i)
                 out << ',';
@@ -56,9 +64,11 @@ int main(int argc, char** argv) {
         }
         out << "]}\n";
         ClearShapeModel(models);
-        std::cout << "median_ms=" << median << " instances=7 runs=" << iterations << '\n';
+        std::cout << "median_ms=" << median << " p95_ms=" << p95
+                  << " threads=" << GetSearchThreadCount() << " instances=7 runs=" << iterations
+                  << '\n';
         return 0;
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';
         return 1;
     }

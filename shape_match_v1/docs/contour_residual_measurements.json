@@ -1,0 +1,961 @@
+{
+  "notes": [
+    "GT is used only for evaluating frozen correspondences, not for optimization.",
+    "Group steps are local linear diagnostics, not final pose estimates.",
+    "Frozen-pair GT loss is not the re-associated HALCON objective."
+  ],
+  "groups": [
+    {
+      "reference_index": 1,
+      "prediction_index": 0,
+      "model": "ring",
+      "method": "nearest_1.5",
+      "component": 0,
+      "template_points": 420,
+      "valid_points": 420,
+      "coverage": 1.0,
+      "model_span_xy": [
+        97.42925853762193,
+        97.52575216170207
+      ],
+      "baseline_normal_rmse": 1.657506016006255e-06,
+      "halcon_pose_frozen_pairs_rmse": 0.005228968001089451,
+      "halcon_pose_reassociated_rmse": 0.005228968001089451,
+      "halcon_pose_reassociated_valid_points": 420,
+      "baseline_support_loss": 1.1538770011007094e-09,
+      "halcon_pose_reassociated_support_loss": 0.011483684669695314,
+      "mean_signed_residual": 5.392668156631649e-09,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        -1.6359018971971227e-08,
+        1.0229968812406047e-07,
+        -4.468816671832978e-09,
+        2.1463679922801923e-09
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        -2.4577000731494618e-08,
+        1.470537385257714e-07,
+        -5.8244245900228356e-09,
+        2.6719412211388377e-09
+      ],
+      "normalized_hessian_condition": 1.08096801097749
+    },
+    {
+      "reference_index": 1,
+      "prediction_index": 0,
+      "model": "ring",
+      "method": "nearest_1.5",
+      "component": 420,
+      "template_points": 185,
+      "valid_points": 185,
+      "coverage": 1.0,
+      "model_span_xy": [
+        52.80988268315663,
+        52.73809705457927
+      ],
+      "baseline_normal_rmse": 3.7479254822816835e-07,
+      "halcon_pose_frozen_pairs_rmse": 0.004939624808745503,
+      "halcon_pose_reassociated_rmse": 0.004939624808745503,
+      "halcon_pose_reassociated_valid_points": 185,
+      "baseline_support_loss": 2.5986849028362316e-11,
+      "halcon_pose_reassociated_support_loss": 0.0045139802514671985,
+      "mean_signed_residual": -2.859543938277854e-07,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        1.63590248741733e-08,
+        -1.0229969278695035e-07,
+        4.4688098299402315e-09,
+        -2.1463677512952838e-09
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        4.515277437800859e-08,
+        -3.3754214797848076e-07,
+        1.602552419130516e-08,
+        -1.0838940528904691e-08
+      ],
+      "normalized_hessian_condition": 2.113992915330734
+    },
+    {
+      "reference_index": 1,
+      "prediction_index": 0,
+      "model": "ring",
+      "method": "profile_gaussian_2",
+      "component": 0,
+      "template_points": 420,
+      "valid_points": 420,
+      "coverage": 1.0,
+      "model_span_xy": [
+        97.42925853762193,
+        97.52575216170207
+      ],
+      "baseline_normal_rmse": 0.11760306610032628,
+      "halcon_pose_frozen_pairs_rmse": 0.11810548429235972,
+      "halcon_pose_reassociated_rmse": 0.11870981550809362,
+      "halcon_pose_reassociated_valid_points": 420,
+      "baseline_support_loss": 5.8088020856030385,
+      "halcon_pose_reassociated_support_loss": 5.918648525145562,
+      "mean_signed_residual": 0.007256330125737275,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        0.0016350385278626998,
+        0.01380783520867427,
+        -0.002864497583200547,
+        -0.00016485432408810645
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.0023843215123429424,
+        0.01991565254347312,
+        -0.0028133668799940254,
+        -0.00020821022277358247
+      ],
+      "normalized_hessian_condition": 1.08164317124799
+    },
+    {
+      "reference_index": 1,
+      "prediction_index": 0,
+      "model": "ring",
+      "method": "profile_gaussian_2",
+      "component": 420,
+      "template_points": 185,
+      "valid_points": 185,
+      "coverage": 1.0,
+      "model_span_xy": [
+        52.80988268315663,
+        52.73809705457927
+      ],
+      "baseline_normal_rmse": 0.11410937206226414,
+      "halcon_pose_frozen_pairs_rmse": 0.11395449051001423,
+      "halcon_pose_reassociated_rmse": 0.11461582227636587,
+      "halcon_pose_reassociated_valid_points": 185,
+      "baseline_support_loss": 2.408875526602182,
+      "halcon_pose_reassociated_support_loss": 2.430305542476185,
+      "mean_signed_residual": 0.02292753044258562,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        0.0019248575691743727,
+        -1.2581799128323041e-05,
+        -0.00030824115387187076,
+        0.00017543019652161904
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.0013111505937223008,
+        -0.009404586581609036,
+        -1.8524147929519614,
+        0.0008746452920286084
+      ],
+      "normalized_hessian_condition": 4.7695549600543545
+    },
+    {
+      "reference_index": 0,
+      "prediction_index": 1,
+      "model": "nut",
+      "method": "nearest_1.5",
+      "component": 0,
+      "template_points": 290,
+      "valid_points": 290,
+      "coverage": 1.0,
+      "model_span_xy": [
+        87.12242303157763,
+        77.27106823238927
+      ],
+      "baseline_normal_rmse": 2.4626457674561853e-14,
+      "halcon_pose_frozen_pairs_rmse": 0.004691432187654775,
+      "halcon_pose_reassociated_rmse": 0.004691432187652387,
+      "halcon_pose_reassociated_valid_points": 290,
+      "baseline_support_loss": 1.7587410110312607e-25,
+      "halcon_pose_reassociated_support_loss": 0.006382765431688851,
+      "mean_signed_residual": 1.3600859768805825e-14,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        2.733740856486864e-15,
+        1.959634096519313e-15,
+        -2.5398088354746607e-14,
+        -3.0173029444518355e-16
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        4.242909997260172e-15,
+        3.146986104823914e-15,
+        -2.5632109364708454e-14,
+        -3.4792645537125033e-16
+      ],
+      "normalized_hessian_condition": 1.0884928488473067
+    },
+    {
+      "reference_index": 0,
+      "prediction_index": 1,
+      "model": "nut",
+      "method": "nearest_1.5",
+      "component": 290,
+      "template_points": 147,
+      "valid_points": 147,
+      "coverage": 1.0,
+      "model_span_xy": [
+        42.885385022798594,
+        42.302698763108324
+      ],
+      "baseline_normal_rmse": 2.231155079129747e-14,
+      "halcon_pose_frozen_pairs_rmse": 0.00402660202162473,
+      "halcon_pose_reassociated_rmse": 0.0040266020216240565,
+      "halcon_pose_reassociated_valid_points": 147,
+      "baseline_support_loss": 7.317737891075907e-26,
+      "halcon_pose_reassociated_support_loss": 0.0023833880045604004,
+      "mean_signed_residual": -8.95664821856966e-15,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        1.2620878099190029e-15,
+        4.0737936662720764e-16,
+        -4.866827601728289e-16,
+        -5.515449036025273e-17
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        4.2639847326548895e-15,
+        -1.4512755886769558e-15,
+        -2.2578406666523808e-13,
+        -4.219887819146606e-16
+      ],
+      "normalized_hessian_condition": 4.612624541253894
+    },
+    {
+      "reference_index": 0,
+      "prediction_index": 1,
+      "model": "nut",
+      "method": "profile_gaussian_2",
+      "component": 0,
+      "template_points": 290,
+      "valid_points": 290,
+      "coverage": 1.0,
+      "model_span_xy": [
+        87.12242303157763,
+        77.27106823238927
+      ],
+      "baseline_normal_rmse": 0.11750502557792462,
+      "halcon_pose_frozen_pairs_rmse": 0.11941680524535983,
+      "halcon_pose_reassociated_rmse": 0.11847816193772898,
+      "halcon_pose_reassociated_valid_points": 290,
+      "baseline_support_loss": 4.004155000459929,
+      "halcon_pose_reassociated_support_loss": 4.070751708281392,
+      "mean_signed_residual": 0.00861846347280014,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        0.009167589725397865,
+        0.052581283968548324,
+        0.023696696537870886,
+        -0.00017547132133747024
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.01323425896533087,
+        0.08069158837668783,
+        0.020607094373285454,
+        -0.00020464700599056367
+      ],
+      "normalized_hessian_condition": 1.0905379609971864
+    },
+    {
+      "reference_index": 0,
+      "prediction_index": 1,
+      "model": "nut",
+      "method": "profile_gaussian_2",
+      "component": 290,
+      "template_points": 147,
+      "valid_points": 147,
+      "coverage": 1.0,
+      "model_span_xy": [
+        42.885385022798594,
+        42.302698763108324
+      ],
+      "baseline_normal_rmse": 0.11499989269277114,
+      "halcon_pose_frozen_pairs_rmse": 0.11471172514983509,
+      "halcon_pose_reassociated_rmse": 0.11469073286908614,
+      "halcon_pose_reassociated_valid_points": 147,
+      "baseline_support_loss": 1.944071371944285,
+      "halcon_pose_reassociated_support_loss": 1.933632738289067,
+      "mean_signed_residual": -0.014312751319320449,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        -0.00495388657008651,
+        -0.006165941287229684,
+        0.0010416435891093829,
+        -8.427101993535158e-05
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        -0.017248583839506986,
+        -0.016185427192650256,
+        0.15697596124175595,
+        -0.0006723110776510855
+      ],
+      "normalized_hessian_condition": 7.5144346268820374
+    },
+    {
+      "reference_index": 2,
+      "prediction_index": 2,
+      "model": "ring",
+      "method": "nearest_1.5",
+      "component": 0,
+      "template_points": 420,
+      "valid_points": 420,
+      "coverage": 1.0,
+      "model_span_xy": [
+        97.42925853762193,
+        97.52575216170207
+      ],
+      "baseline_normal_rmse": 0.3278467669017522,
+      "halcon_pose_frozen_pairs_rmse": 0.26271825083880895,
+      "halcon_pose_reassociated_rmse": 0.26222670199454307,
+      "halcon_pose_reassociated_valid_points": 420,
+      "baseline_support_loss": 45.14307107853137,
+      "halcon_pose_reassociated_support_loss": 28.880394160352658,
+      "mean_signed_residual": 0.14740159431685754,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        -0.0036565619643185105,
+        -0.09488148254521522,
+        -0.0049762770055172,
+        -0.0051695957175614225
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        -0.0029968426592279895,
+        -0.13537099111435152,
+        -0.005643982020003202,
+        -0.0064099029457489465
+      ],
+      "normalized_hessian_condition": 1.066468092987524
+    },
+    {
+      "reference_index": 2,
+      "prediction_index": 2,
+      "model": "ring",
+      "method": "nearest_1.5",
+      "component": 420,
+      "template_points": 185,
+      "valid_points": 185,
+      "coverage": 1.0,
+      "model_span_xy": [
+        52.80988268315663,
+        52.73809705457927
+      ],
+      "baseline_normal_rmse": 0.6143310405728241,
+      "halcon_pose_frozen_pairs_rmse": 0.7713472656696794,
+      "halcon_pose_reassociated_rmse": 0.7733801683797625,
+      "halcon_pose_reassociated_valid_points": 185,
+      "baseline_support_loss": 69.81948607108842,
+      "halcon_pose_reassociated_support_loss": 110.6516236959753,
+      "mean_signed_residual": 0.5607197406925252,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        0.0036565619643047624,
+        0.09488148254523078,
+        0.004976277005538939,
+        0.0051695957175601215
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.03146562888920709,
+        0.3239052965692496,
+        0.16288365797243173,
+        0.02651569565840794
+      ],
+      "normalized_hessian_condition": 3.475649347313579
+    },
+    {
+      "reference_index": 2,
+      "prediction_index": 2,
+      "model": "ring",
+      "method": "profile_gaussian_2",
+      "component": 0,
+      "template_points": 420,
+      "valid_points": 420,
+      "coverage": 1.0,
+      "model_span_xy": [
+        97.42925853762193,
+        97.52575216170207
+      ],
+      "baseline_normal_rmse": 0.35528294300080476,
+      "halcon_pose_frozen_pairs_rmse": 0.2936163729264316,
+      "halcon_pose_reassociated_rmse": 0.29715421409821713,
+      "halcon_pose_reassociated_valid_points": 420,
+      "baseline_support_loss": 53.0149072266715,
+      "halcon_pose_reassociated_support_loss": 37.08626332165821,
+      "mean_signed_residual": 0.14664422344832242,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        -0.007250746825764088,
+        -0.09855784606354592,
+        -0.01416650417583603,
+        -0.005197859467108179
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        -0.008482611470177648,
+        -0.14078154478722446,
+        -0.014470488950199794,
+        -0.0064359461685270705
+      ],
+      "normalized_hessian_condition": 1.0729636488937206
+    },
+    {
+      "reference_index": 2,
+      "prediction_index": 2,
+      "model": "ring",
+      "method": "profile_gaussian_2",
+      "component": 420,
+      "template_points": 185,
+      "valid_points": 185,
+      "coverage": 1.0,
+      "model_span_xy": [
+        52.80988268315663,
+        52.73809705457927
+      ],
+      "baseline_normal_rmse": 0.6604573981182943,
+      "halcon_pose_frozen_pairs_rmse": 0.8151939892514233,
+      "halcon_pose_reassociated_rmse": 0.8147449958659709,
+      "halcon_pose_reassociated_valid_points": 185,
+      "baseline_support_loss": 80.69773532489963,
+      "halcon_pose_reassociated_support_loss": 122.80474053339859,
+      "mean_signed_residual": 0.5899430446109292,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        0.0027956804094950334,
+        0.10258738793458813,
+        0.004008936913005793,
+        0.005405451485109236
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.008996052309216665,
+        0.34341546077264307,
+        -1.8482103533331682,
+        0.02786641891709857
+      ],
+      "normalized_hessian_condition": 7.10592335562684
+    },
+    {
+      "reference_index": 4,
+      "prediction_index": 3,
+      "model": "nut",
+      "method": "nearest_1.5",
+      "component": 0,
+      "template_points": 290,
+      "valid_points": 290,
+      "coverage": 1.0,
+      "model_span_xy": [
+        87.12242303157763,
+        77.27106823238927
+      ],
+      "baseline_normal_rmse": 0.2931757170184163,
+      "halcon_pose_frozen_pairs_rmse": 0.4961530099368296,
+      "halcon_pose_reassociated_rmse": 0.48844257511745415,
+      "halcon_pose_reassociated_valid_points": 290,
+      "baseline_support_loss": 24.92608030428613,
+      "halcon_pose_reassociated_support_loss": 69.18708326433725,
+      "mean_signed_residual": -0.041509720333028535,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        0.01042948104622297,
+        -0.087041844154151,
+        -0.0066565779947628445,
+        0.0006950734809449906
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.017293750669552535,
+        -0.10808476197906272,
+        -0.006189574801848214,
+        0.0008118944789318411
+      ],
+      "normalized_hessian_condition": 1.1717165002940864
+    },
+    {
+      "reference_index": 4,
+      "prediction_index": 3,
+      "model": "nut",
+      "method": "nearest_1.5",
+      "component": 290,
+      "template_points": 147,
+      "valid_points": 64,
+      "coverage": 0.43537414965986393,
+      "model_span_xy": [
+        42.885385022798594,
+        42.302698763108324
+      ],
+      "baseline_normal_rmse": 0.6262917106434187,
+      "halcon_pose_frozen_pairs_rmse": 0.7703801672859389,
+      "halcon_pose_reassociated_rmse": 0.8016842268634773,
+      "halcon_pose_reassociated_valid_points": 67,
+      "baseline_support_loss": 211.85344363652223,
+      "halcon_pose_reassociated_support_loss": 223.06073917331332,
+      "mean_signed_residual": -0.34547958321241573,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        -0.010429481046223071,
+        0.08704184415415805,
+        0.0066565779947671926,
+        -0.0006950734809451578
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        1.2260891544280756,
+        -0.13730480798699302,
+        5.126002787528714,
+        -0.04282155184181749
+      ],
+      "normalized_hessian_condition": 25.77983284097322
+    },
+    {
+      "reference_index": 4,
+      "prediction_index": 3,
+      "model": "nut",
+      "method": "profile_gaussian_2",
+      "component": 0,
+      "template_points": 290,
+      "valid_points": 290,
+      "coverage": 1.0,
+      "model_span_xy": [
+        87.12242303157763,
+        77.27106823238927
+      ],
+      "baseline_normal_rmse": 0.32867318546077673,
+      "halcon_pose_frozen_pairs_rmse": 0.5258056479412067,
+      "halcon_pose_reassociated_rmse": 0.5286670295724483,
+      "halcon_pose_reassociated_valid_points": 290,
+      "baseline_support_loss": 31.3275582238709,
+      "halcon_pose_reassociated_support_loss": 81.05176016551722,
+      "mean_signed_residual": -0.028236384680414124,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        -0.00027411086379339374,
+        -0.07523801684892638,
+        0.006136782780530545,
+        0.00047090553834197384
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.0016078487859431962,
+        -0.09622601632068431,
+        0.004950916688920581,
+        0.0005612209034748723
+      ],
+      "normalized_hessian_condition": 1.1351468380509526
+    },
+    {
+      "reference_index": 4,
+      "prediction_index": 3,
+      "model": "nut",
+      "method": "profile_gaussian_2",
+      "component": 290,
+      "template_points": 147,
+      "valid_points": 74,
+      "coverage": 0.5034013605442177,
+      "model_span_xy": [
+        42.885385022798594,
+        42.302698763108324
+      ],
+      "baseline_normal_rmse": 0.8897621173804287,
+      "halcon_pose_frozen_pairs_rmse": 0.9522669318045403,
+      "halcon_pose_reassociated_rmse": 0.9645369901605222,
+      "halcon_pose_reassociated_valid_points": 79,
+      "baseline_support_loss": 350.58407028887245,
+      "halcon_pose_reassociated_support_loss": 345.4961968256456,
+      "mean_signed_residual": -0.4801635642994338,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        0.013155815975129166,
+        0.08717424451365853,
+        0.02921896162559486,
+        -0.001179162350985189
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.8517001181130677,
+        -0.20909175944110917,
+        8.668880054939406,
+        -0.03469777061232224
+      ],
+      "normalized_hessian_condition": 7.560999064232818
+    },
+    {
+      "reference_index": 3,
+      "prediction_index": 4,
+      "model": "nut",
+      "method": "nearest_1.5",
+      "component": 0,
+      "template_points": 290,
+      "valid_points": 290,
+      "coverage": 1.0,
+      "model_span_xy": [
+        87.12242303157763,
+        77.27106823238927
+      ],
+      "baseline_normal_rmse": 0.2071407294555448,
+      "halcon_pose_frozen_pairs_rmse": 0.40263476451861874,
+      "halcon_pose_reassociated_rmse": 0.3994596969941424,
+      "halcon_pose_reassociated_valid_points": 290,
+      "baseline_support_loss": 12.443111721818807,
+      "halcon_pose_reassociated_support_loss": 46.2747343615691,
+      "mean_signed_residual": -0.052709655294890294,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        -0.10467546751101854,
+        -0.11866479556476817,
+        -0.02175159471227504,
+        0.001515129191873688
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        -0.1342412689492494,
+        -0.1534640186378848,
+        -0.04356365810110125,
+        0.0018504950697066829
+      ],
+      "normalized_hessian_condition": 1.2333009838332474
+    },
+    {
+      "reference_index": 3,
+      "prediction_index": 4,
+      "model": "nut",
+      "method": "nearest_1.5",
+      "component": 290,
+      "template_points": 147,
+      "valid_points": 57,
+      "coverage": 0.3877551020408163,
+      "model_span_xy": [
+        42.885385022798594,
+        42.302698763108324
+      ],
+      "baseline_normal_rmse": 0.753077861737582,
+      "halcon_pose_frozen_pairs_rmse": 0.7963289015943601,
+      "halcon_pose_reassociated_rmse": 0.8182891104201323,
+      "halcon_pose_reassociated_valid_points": 62,
+      "baseline_support_loss": 234.82619715283718,
+      "halcon_pose_reassociated_support_loss": 232.76501823039462,
+      "mean_signed_residual": -0.4690122927133277,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        0.1046754675109603,
+        0.11866479556474649,
+        0.021751594712232522,
+        -0.001515129191874068
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.7530058739794321,
+        0.14952230960214233,
+        -7.454345926981124,
+        -0.02256972132040283
+      ],
+      "normalized_hessian_condition": 11.67938010059507
+    },
+    {
+      "reference_index": 3,
+      "prediction_index": 4,
+      "model": "nut",
+      "method": "profile_gaussian_2",
+      "component": 0,
+      "template_points": 290,
+      "valid_points": 290,
+      "coverage": 1.0,
+      "model_span_xy": [
+        87.12242303157763,
+        77.27106823238927
+      ],
+      "baseline_normal_rmse": 0.22414189512463514,
+      "halcon_pose_frozen_pairs_rmse": 0.387799782722183,
+      "halcon_pose_reassociated_rmse": 0.3920188248957018,
+      "halcon_pose_reassociated_valid_points": 290,
+      "baseline_support_loss": 14.569480853518254,
+      "halcon_pose_reassociated_support_loss": 44.566840131056,
+      "mean_signed_residual": -0.030454246074389155,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        -0.04447937723059739,
+        -0.09772625725967059,
+        -0.05984080216272419,
+        0.0007627711259479077
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        -0.06412527207988833,
+        -0.12616998260188797,
+        -0.07353606782744203,
+        0.0010257926793425425
+      ],
+      "normalized_hessian_condition": 1.2123745443426008
+    },
+    {
+      "reference_index": 3,
+      "prediction_index": 4,
+      "model": "nut",
+      "method": "profile_gaussian_2",
+      "component": 290,
+      "template_points": 147,
+      "valid_points": 84,
+      "coverage": 0.5714285714285714,
+      "model_span_xy": [
+        42.885385022798594,
+        42.302698763108324
+      ],
+      "baseline_normal_rmse": 0.9739612564438984,
+      "halcon_pose_frozen_pairs_rmse": 0.9471448280701508,
+      "halcon_pose_reassociated_rmse": 0.9373909660958051,
+      "halcon_pose_reassociated_valid_points": 88,
+      "baseline_support_loss": 331.6824444405173,
+      "halcon_pose_reassociated_support_loss": 313.32576045198635,
+      "mean_signed_residual": -0.4549149706987209,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        0.17709254919484663,
+        0.11229616985668534,
+        0.09004386661325575,
+        -0.0023535069088007317
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.9234049925920892,
+        -0.13469046850464092,
+        -4.159160487520389,
+        -0.03982691796654858
+      ],
+      "normalized_hessian_condition": 10.151291498306978
+    },
+    {
+      "reference_index": 6,
+      "prediction_index": 5,
+      "model": "nut",
+      "method": "nearest_1.5",
+      "component": 0,
+      "template_points": 290,
+      "valid_points": 290,
+      "coverage": 1.0,
+      "model_span_xy": [
+        87.12242303157763,
+        77.27106823238927
+      ],
+      "baseline_normal_rmse": 0.1042325915917944,
+      "halcon_pose_frozen_pairs_rmse": 0.21128043241303324,
+      "halcon_pose_reassociated_rmse": 0.21169844345366856,
+      "halcon_pose_reassociated_valid_points": 290,
+      "baseline_support_loss": 3.150685613483125,
+      "halcon_pose_reassociated_support_loss": 12.99670697860477,
+      "mean_signed_residual": 0.01245275137756631,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        0.04051898914438725,
+        0.011930246725629791,
+        0.013950209843034236,
+        -0.000371342156531886
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.04348575298134568,
+        0.01263983452508754,
+        0.013595175152684573,
+        -0.0004005185298285742
+      ],
+      "normalized_hessian_condition": 1.1238717477683067
+    },
+    {
+      "reference_index": 6,
+      "prediction_index": 5,
+      "model": "nut",
+      "method": "nearest_1.5",
+      "component": 290,
+      "template_points": 147,
+      "valid_points": 13,
+      "coverage": 0.08843537414965986,
+      "model_span_xy": [
+        42.885385022798594,
+        42.302698763108324
+      ],
+      "baseline_normal_rmse": 0.7598892491226449,
+      "halcon_pose_frozen_pairs_rmse": 0.6649437651370227,
+      "halcon_pose_reassociated_rmse": 1.0020336331783213,
+      "halcon_pose_reassociated_valid_points": 22,
+      "baseline_support_loss": 309.0066117221183,
+      "halcon_pose_reassociated_support_loss": 303.339570844452,
+      "mean_signed_residual": 0.5464801026946687,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        -0.04051898914436847,
+        -0.011930246725631186,
+        -0.013950209843033965,
+        0.0003713421565318403
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        -6.031790147681636,
+        -0.3918532094628088,
+        6.3049495272259755,
+        -0.23764387399079076
+      ],
+      "normalized_hessian_condition": 3211.2064392017132
+    },
+    {
+      "reference_index": 6,
+      "prediction_index": 5,
+      "model": "nut",
+      "method": "profile_gaussian_2",
+      "component": 0,
+      "template_points": 290,
+      "valid_points": 290,
+      "coverage": 1.0,
+      "model_span_xy": [
+        87.12242303157763,
+        77.27106823238927
+      ],
+      "baseline_normal_rmse": 0.17570322818933148,
+      "halcon_pose_frozen_pairs_rmse": 0.25675965860805483,
+      "halcon_pose_reassociated_rmse": 0.25861620782218325,
+      "halcon_pose_reassociated_valid_points": 290,
+      "baseline_support_loss": 8.952771074884165,
+      "halcon_pose_reassociated_support_loss": 19.39587945501474,
+      "mean_signed_residual": -0.00587003938860063,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        0.06023829258583155,
+        0.030417581960180254,
+        -0.01650382405017522,
+        0.00017488041584386797
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.06457948285754246,
+        0.03225291365719645,
+        -0.01793434341585267,
+        0.0001349747719277566
+      ],
+      "normalized_hessian_condition": 1.1236200782352284
+    },
+    {
+      "reference_index": 6,
+      "prediction_index": 5,
+      "model": "nut",
+      "method": "profile_gaussian_2",
+      "component": 290,
+      "template_points": 147,
+      "valid_points": 25,
+      "coverage": 0.17006802721088435,
+      "model_span_xy": [
+        42.885385022798594,
+        42.302698763108324
+      ],
+      "baseline_normal_rmse": 1.3633025132087648,
+      "halcon_pose_frozen_pairs_rmse": 1.2216756377642344,
+      "halcon_pose_reassociated_rmse": 1.3669692679458862,
+      "halcon_pose_reassociated_valid_points": 35,
+      "baseline_support_loss": 534.4648435630334,
+      "halcon_pose_reassociated_support_loss": 513.4011742827979,
+      "mean_signed_residual": -0.28258320056784125,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        -0.10687412221707837,
+        0.08317891032524546,
+        0.0019889289018255522,
+        -0.00029185128000888775
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        -1.980237938358152,
+        -0.04307960757085996,
+        2.1085126213706435,
+        -0.044904435453610926
+      ],
+      "normalized_hessian_condition": 42.31328995402973
+    },
+    {
+      "reference_index": 5,
+      "prediction_index": 6,
+      "model": "ring",
+      "method": "nearest_1.5",
+      "component": 0,
+      "template_points": 420,
+      "valid_points": 420,
+      "coverage": 1.0,
+      "model_span_xy": [
+        97.42925853762193,
+        97.52575216170207
+      ],
+      "baseline_normal_rmse": 0.6016590015876294,
+      "halcon_pose_frozen_pairs_rmse": 0.9337388767612184,
+      "halcon_pose_reassociated_rmse": 0.6977811256467301,
+      "halcon_pose_reassociated_valid_points": 353,
+      "baseline_support_loss": 152.0372927603977,
+      "halcon_pose_reassociated_support_loss": 322.62517025601267,
+      "mean_signed_residual": -0.10070207107724279,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        -3.1375808201561384e-11,
+        -1.4650799670667958e-11,
+        -1.0045965216017953e-10,
+        8.008898774204687e-12
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        -3.1375808201561384e-11,
+        -1.4650799670667958e-11,
+        -1.0045965216017953e-10,
+        8.008898774204687e-12
+      ],
+      "normalized_hessian_condition": 1.070511542248566
+    },
+    {
+      "reference_index": 5,
+      "prediction_index": 6,
+      "model": "ring",
+      "method": "nearest_1.5",
+      "component": 420,
+      "template_points": 185,
+      "valid_points": 0,
+      "coverage": 0.0,
+      "model_span_xy": [
+        52.80988268315663,
+        52.73809705457927
+      ],
+      "baseline_normal_rmse": null,
+      "halcon_pose_frozen_pairs_rmse": null,
+      "halcon_pose_reassociated_rmse": null,
+      "halcon_pose_reassociated_valid_points": 0,
+      "baseline_support_loss": 416.25,
+      "halcon_pose_reassociated_support_loss": 416.25,
+      "mean_signed_residual": null,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "normalized_hessian_condition": null
+    },
+    {
+      "reference_index": 5,
+      "prediction_index": 6,
+      "model": "ring",
+      "method": "profile_gaussian_2",
+      "component": 0,
+      "template_points": 420,
+      "valid_points": 420,
+      "coverage": 1.0,
+      "model_span_xy": [
+        97.42925853762193,
+        97.52575216170207
+      ],
+      "baseline_normal_rmse": 0.6238837239938769,
+      "halcon_pose_frozen_pairs_rmse": 0.950121588473666,
+      "halcon_pose_reassociated_rmse": 0.8610527002851855,
+      "halcon_pose_reassociated_valid_points": 398,
+      "baseline_support_loss": 163.47697844707656,
+      "halcon_pose_reassociated_support_loss": 383.081877562027,
+      "mean_signed_residual": -0.10097743473374475,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        0.008196010153321928,
+        0.010833253857986317,
+        -0.0049331246637177445,
+        -3.319173954053386e-05
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.008196010153321928,
+        0.010833253857986317,
+        -0.0049331246637177445,
+        -3.319173954053386e-05
+      ],
+      "normalized_hessian_condition": 1.071703638547609
+    },
+    {
+      "reference_index": 5,
+      "prediction_index": 6,
+      "model": "ring",
+      "method": "profile_gaussian_2",
+      "component": 420,
+      "template_points": 185,
+      "valid_points": 0,
+      "coverage": 0.0,
+      "model_span_xy": [
+        52.80988268315663,
+        52.73809705457927
+      ],
+      "baseline_normal_rmse": null,
+      "halcon_pose_frozen_pairs_rmse": null,
+      "halcon_pose_reassociated_rmse": 1.6833465513034305,
+      "halcon_pose_reassociated_valid_points": 23,
+      "baseline_support_loss": 740.0,
+      "halcon_pose_reassociated_support_loss": 713.1740790710585,
+      "mean_signed_residual": null,
+      "joint_step_contribution_tx_ty_theta_deg_logscale": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "isolated_linear_step_tx_ty_theta_deg_logscale": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "normalized_hessian_condition": null
+    }
+  ]
+}

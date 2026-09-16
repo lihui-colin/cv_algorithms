@@ -131,4 +131,5 @@ struct SearchDiagnostics {
     size_t evaluated_poses = 0, coarse_candidates = 0, refined_candidates = 0;
 };
 SearchDiagnostics GetSearchDiagnostics(const HTuple &MatchResultID);
+size_t GetSearchThreadCount();
 } // namespace shape_match

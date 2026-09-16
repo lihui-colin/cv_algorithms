@@ -26,6 +26,8 @@ Params MakeDefaultParams(uint64_t id) {
             {"greediness", 0.9},
             {"strict_boundaries", std::string("false")},
             {"subpixel", std::string("least_squares")},
+            {"refinement_method", std::string("nearest_point")},
+            {"refinement_radius", 1.5},
             {"pyramid_level_highest", std::string("auto")},
             {"pyramid_level_lowest", int64_t(1)},
             {"pyramid_level_robust_tracking", std::string("false")},
@@ -103,6 +105,8 @@ void ValidateParams(const Params &p) {
                             "point_reduction_high"});
     one_of("subpixel", {"none", "interpolation", "least_squares", "least_squares_high",
                         "least_squares_very_high"});
+    one_of("refinement_method", {"nearest_point", "contour", "gradient", "gradient_gaussian"});
+    range("refinement_radius", 0.5, 10.0);
     for (auto k :
          {"strict_boundaries", "max_overlap_global_enable", "prepare_contours_for_visualization"})
         one_of(k, {"true", "false"});
@@ -177,6 +181,10 @@ std::shared_ptr<TrainedData> BuildModel(const Image &im, const Params &params) {
         data->radius = std::max(data->radius, std::sqrt(Dot(f.p, f.p)));
     }
     data->rectangle = MinimumRectangle(data->dense);
+    data->gaussian_dense = GaussianModelFeatures(im, Num(p, "contrast_low"),
+                                                 Num(p, "contrast_high"), int(Num(p, "min_size")));
+    for (auto &f : data->gaussian_dense)
+        f.p = f.p - data->origin;
     if (IsAuto(p["num_levels"]))
         p["num_levels"] = int64_t(
             std::clamp(int(std::floor(std::log2(std::max(1.0, data->radius / 9)))) + 1, 1, 5));

@@ -41,20 +41,24 @@ Image Smooth(const Image &im, double sigma) {
     Image tmp = im, out = im;
     // Domain is metadata: filtering accesses original neighboring pixels; it never pads
     // transparent pixels with black. Edge extraction later checks the valid support.
-    for (int y = 0; y < im.height; ++y)
-        for (int x = 0; x < im.width; ++x) {
-            double v = 0;
-            for (int k = -radius; k <= radius; ++k)
-                v += kernel[k + radius] * im(y, std::clamp(x + k, 0, im.width - 1));
-            tmp.pixels[size_t(y) * im.width + x] = float(v);
-        }
-    for (int y = 0; y < im.height; ++y)
-        for (int x = 0; x < im.width; ++x) {
-            double v = 0;
-            for (int k = -radius; k <= radius; ++k)
-                v += kernel[k + radius] * tmp(std::clamp(y + k, 0, im.height - 1), x);
-            out.pixels[size_t(y) * im.width + x] = float(v);
-        }
+    ParallelFor(size_t(im.height), [&](size_t begin, size_t end, size_t) {
+        for (int y = int(begin); y < int(end); ++y)
+            for (int x = 0; x < im.width; ++x) {
+                double v = 0;
+                for (int k = -radius; k <= radius; ++k)
+                    v += kernel[k + radius] * im(y, std::clamp(x + k, 0, im.width - 1));
+                tmp.pixels[size_t(y) * im.width + x] = float(v);
+            }
+    });
+    ParallelFor(size_t(im.height), [&](size_t begin, size_t end, size_t) {
+        for (int y = int(begin); y < int(end); ++y)
+            for (int x = 0; x < im.width; ++x) {
+                double v = 0;
+                for (int k = -radius; k <= radius; ++k)
+                    v += kernel[k + radius] * tmp(std::clamp(y + k, 0, im.height - 1), x);
+                out.pixels[size_t(y) * im.width + x] = float(v);
+            }
+    });
     return out;
 }
 Image Downsample(const Image &im) {
@@ -65,12 +69,14 @@ Image Downsample(const Image &im) {
     out.pixels.resize(size_t(out.width) * out.height);
     out.domain.resize(out.pixels.size());
     // Explicit sampling map: level point (x,y) corresponds to previous (2*x,2*y).
-    for (int y = 0; y < out.height; ++y)
-        for (int x = 0; x < out.width; ++x) {
-            size_t k = size_t(y) * out.width + x, old = size_t(2 * y) * im.width + 2 * x;
-            out.pixels[k] = filtered.pixels[old];
-            out.domain[k] = im.domain[old];
-        }
+    ParallelFor(size_t(out.height), [&](size_t begin, size_t end, size_t) {
+        for (int y = int(begin); y < int(end); ++y)
+            for (int x = 0; x < out.width; ++x) {
+                size_t k = size_t(y) * out.width + x, old = size_t(2 * y) * im.width + 2 * x;
+                out.pixels[k] = filtered.pixels[old];
+                out.domain[k] = im.domain[old];
+            }
+    });
     return out;
 }
 GradientField ComputeGradients(const Image &im) {
@@ -80,15 +86,17 @@ GradientField ComputeGradients(const Image &im) {
     out.gx.resize(im.pixels.size());
     out.gy.resize(im.pixels.size());
     out.mag.resize(im.pixels.size());
-    for (int y = 1; y < im.height - 1; ++y)
-        for (int x = 1; x < im.width - 1; ++x) {
-            size_t i = size_t(y) * im.width + x;
-            float gx = (im(y, x + 1) - im(y, x - 1)) * 0.5f,
-                  gy = (im(y + 1, x) - im(y - 1, x)) * 0.5f;
-            out.gx[i] = gx;
-            out.gy[i] = gy;
-            out.mag[i] = std::hypot(gx, gy);
-        }
+    ParallelFor(size_t(std::max(0, im.height - 2)), [&](size_t begin, size_t end, size_t) {
+        for (int y = int(begin) + 1; y < int(end) + 1; ++y)
+            for (int x = 1; x < im.width - 1; ++x) {
+                size_t i = size_t(y) * im.width + x;
+                float gx = (im(y, x + 1) - im(y, x - 1)) * 0.5f,
+                      gy = (im(y + 1, x) - im(y - 1, x)) * 0.5f;
+                out.gx[i] = gx;
+                out.gy[i] = gy;
+                out.mag[i] = std::hypot(gx, gy);
+            }
+    });
     return out;
 }
 ContourSet TraceContours(Features &features) {
@@ -147,31 +155,44 @@ Features ExtractSubpixelContours(const Image &im, const GradientField &g, double
                                  int min_size) {
     Features candidates;
     std::vector<int> grid(im.pixels.size(), -1);
-    for (int y = 3; y < im.height - 3; ++y)
-        for (int x = 3; x < im.width - 3; ++x) {
-            size_t i = size_t(y) * im.width + x;
-            double m = g.mag[i];
-            if (m < std::max(1e-5, low))
-                continue;
-            bool valid = true;
-            for (int dy = -2; dy <= 2 && valid; ++dy)
-                for (int dx = -2; dx <= 2; ++dx)
-                    if (!im.domain[size_t(y + dy) * im.width + x + dx]) {
-                        valid = false;
-                        break;
-                    }
-            if (!valid)
-                continue;
-            Vec n{g.gx[i] / m, g.gy[i] / m};
-            double left = SampleArray(g.mag, g.width, g.height, x - n.x, y - n.y),
-                   right = SampleArray(g.mag, g.width, g.height, x + n.x, y + n.y);
-            if (m < left || m <= right)
-                continue;
-            double den = left - 2 * m + right;
-            double delta =
-                std::abs(den) > 1e-8 ? std::clamp(0.5 * (left - right) / den, -0.5, 0.5) : 0;
-            grid[i] = int(candidates.size());
-            candidates.push_back({{x + delta * n.x, y + delta * n.y}, n, m, 1, -1});
+    const size_t row_count = size_t(std::max(0, im.height - 6));
+    std::vector<Features> chunks(SearchWorkerCount(row_count));
+    ParallelFor(row_count, [&](size_t begin, size_t end, size_t worker) {
+        auto &chunk = chunks[worker];
+        chunk.reserve((end - begin) * size_t(im.width) / 8);
+        for (int y = int(begin) + 3; y < int(end) + 3; ++y) {
+            for (int x = 3; x < im.width - 3; ++x) {
+                size_t i = size_t(y) * im.width + x;
+                double m = g.mag[i];
+                if (m < std::max(1e-5, low))
+                    continue;
+                bool valid = true;
+                for (int dy = -2; dy <= 2 && valid; ++dy)
+                    for (int dx = -2; dx <= 2; ++dx)
+                        if (!im.domain[size_t(y + dy) * im.width + x + dx]) {
+                            valid = false;
+                            break;
+                        }
+                if (!valid)
+                    continue;
+                Vec n{g.gx[i] / m, g.gy[i] / m};
+                double left = SampleArray(g.mag, g.width, g.height, x - n.x, y - n.y),
+                       right = SampleArray(g.mag, g.width, g.height, x + n.x, y + n.y);
+                if (m < left || m <= right)
+                    continue;
+                double den = left - 2 * m + right;
+                double delta =
+                    std::abs(den) > 1e-8 ? std::clamp(0.5 * (left - right) / den, -0.5, 0.5) : 0;
+                chunk.push_back({{x + delta * n.x, y + delta * n.y}, n, m, 1, -1});
+            }
+        }
+    });
+    for (auto &chunk : chunks)
+        for (auto &candidate : chunk) {
+            const int x = int(std::lround(candidate.p.x));
+            const int y = int(std::lround(candidate.p.y));
+            grid[size_t(y) * im.width + x] = int(candidates.size());
+            candidates.push_back(std::move(candidate));
         }
     // Hysteresis operates on connected weak/strong edge components.
     std::vector<char> seen(candidates.size());
@@ -228,6 +249,62 @@ Features SelectModelFeatures(const Features &f, size_t maximum) {
     }
     return out;
 }
+static void DistanceTransformLine(const std::vector<double> &centers,
+                                  const std::vector<double> &base_costs,
+                                  const std::vector<int> &input_labels,
+                                  std::vector<int> &output_labels, std::vector<int> &envelope,
+                                  std::vector<double> &boundaries) {
+    const int count = int(centers.size());
+    envelope.clear();
+    boundaries.clear();
+    envelope.reserve(size_t(count));
+    boundaries.reserve(size_t(count));
+    for (int candidate = 0; candidate < count; ++candidate) {
+        if (input_labels[size_t(candidate)] < 0)
+            continue;
+        bool discard = false;
+        double intersection = 0;
+        while (!envelope.empty()) {
+            const int previous = envelope.back();
+            const double a = centers[size_t(previous)], b = centers[size_t(candidate)];
+            if (b <= a) {
+                if (b == a && base_costs[size_t(candidate)] >= base_costs[size_t(previous)]) {
+                    discard = true;
+                    break;
+                }
+                envelope.pop_back();
+                boundaries.pop_back();
+                continue;
+            }
+            intersection =
+                (base_costs[size_t(candidate)] + b * b - base_costs[size_t(previous)] - a * a) /
+                (2 * (b - a));
+            if (intersection > boundaries.back())
+                break;
+            envelope.pop_back();
+            boundaries.pop_back();
+        }
+        if (discard)
+            continue;
+        if (envelope.empty())
+            intersection = -std::numeric_limits<double>::infinity();
+        envelope.push_back(candidate);
+        boundaries.push_back(intersection);
+    }
+    output_labels.resize(size_t(count));
+    if (envelope.empty()) {
+        std::fill(output_labels.begin(), output_labels.end(), -1);
+        return;
+    }
+    size_t active = 0;
+    for (int position = 0; position < count; ++position) {
+        while (active + 1 < envelope.size() && boundaries[active + 1] < position)
+            ++active;
+        const int source = envelope[active];
+        output_labels[size_t(position)] = input_labels[size_t(source)];
+    }
+}
+
 EdgeField BuildEdgeField(const Image &im, const GradientField &g, double contrast) {
     EdgeField field;
     field.width = im.width;
@@ -237,38 +314,42 @@ EdgeField BuildEdgeField(const Image &im, const GradientField &g, double contras
     for (size_t i = 0; i < field.edges.size(); ++i) {
         auto p = field.edges[i].p;
         int x = int(std::lround(p.x)), y = int(std::lround(p.y));
-        field.nearest[size_t(y) * im.width + x] = int(i);
+        auto &label = field.nearest[size_t(y) * im.width + x];
+        const double d = Sq(p.x - x) + Sq(p.y - y);
+        if (label < 0 ||
+            d < Sq(field.edges[size_t(label)].p.x - x) + Sq(field.edges[size_t(label)].p.y - y))
+            label = int(i);
     }
-    // Four directional sweeps propagate nearest edge labels with exact Euclidean
-    // comparisons. This is a fast approximate Voronoi map, not an exact EDT.
-    auto relax = [&](int x, int y, int nx, int ny) {
-        if (nx < 0 || ny < 0 || nx >= im.width || ny >= im.height)
-            return;
-        int j = field.nearest[size_t(ny) * im.width + nx];
-        if (j < 0)
-            return;
-        auto &at = field.nearest[size_t(y) * im.width + x];
-        Vec p{double(x), double(y)};
-        if (at < 0 || Dot(field.edges[j].p - p, field.edges[j].p - p) <
-                          Dot(field.edges[at].p - p, field.edges[at].p - p))
-            at = j;
+    // Two lower-envelope passes approximate nearest subpixel-edge labels.
+    // Separability is exact for grid-aligned sites, but choosing one label per
+    // row can discard a subpixel site needed by the following column pass.
+    std::vector<int> horizontal(field.nearest.size(), -1);
+    auto transform = [&](bool along_rows, const std::vector<int> &input, std::vector<int> &output) {
+        const int lines = along_rows ? im.height : im.width;
+        const int length = along_rows ? im.width : im.height;
+        ParallelFor(size_t(lines), [&](size_t begin, size_t end, size_t) {
+            std::vector<double> centers(size_t(length), 0), costs(size_t(length), 0), boundaries;
+            std::vector<int> labels(size_t(length), -1), line_labels, envelope;
+            for (int line = int(begin); line < int(end); ++line) {
+                const size_t base = along_rows ? size_t(line) * im.width : size_t(line);
+                const size_t stride = along_rows ? 1 : size_t(im.width);
+                for (int position = 0; position < length; ++position) {
+                    const int label = input[base + size_t(position) * stride];
+                    labels[size_t(position)] = label;
+                    if (label >= 0) {
+                        const auto &p = field.edges[size_t(label)].p;
+                        centers[size_t(position)] = along_rows ? p.x : p.y;
+                        costs[size_t(position)] = Sq(line - (along_rows ? p.y : p.x));
+                    }
+                }
+                DistanceTransformLine(centers, costs, labels, line_labels, envelope, boundaries);
+                for (int position = 0; position < length; ++position)
+                    output[base + size_t(position) * stride] = line_labels[size_t(position)];
+            }
+        });
     };
-    for (int pass = 0; pass < 2; ++pass) {
-        for (int y = 0; y < im.height; ++y)
-            for (int x = 0; x < im.width; ++x) {
-                relax(x, y, x - 1, y);
-                relax(x, y, x - 1, y - 1);
-                relax(x, y, x, y - 1);
-                relax(x, y, x + 1, y - 1);
-            }
-        for (int y = im.height - 1; y >= 0; --y)
-            for (int x = im.width - 1; x >= 0; --x) {
-                relax(x, y, x + 1, y);
-                relax(x, y, x + 1, y + 1);
-                relax(x, y, x, y + 1);
-                relax(x, y, x - 1, y + 1);
-            }
-    }
+    transform(true, field.nearest, horizontal);
+    transform(false, horizontal, field.nearest);
     return field;
 }
 static double Cross(Vec a, Vec b) {
@@ -355,18 +436,21 @@ double RectangleOverlap(const Match &a, const Match &b) {
     }
     return std::clamp(Area(subject) / denominator, 0.0, 1.0);
 }
-SearchPyramid BuildSearchPyramid(const Image &image, int count, double contrast) {
+SearchPyramid BuildSearchPyramid(const Image &image, int count, double contrast, bool precise) {
     SearchPyramid out;
+    out.reserve(size_t(count));
     Image current = image;
-    // Search domain limits candidate origins, not pixels used to observe contours.
+    // Search domain limits origins, not the pixels used to observe contours.
     std::fill(current.domain.begin(), current.domain.end(), 1);
-    for (int l = 0; l < count; ++l) {
+    for (int level = 0; level < count; ++level) {
         Image filtered = Smooth(current, 0.8);
         auto gradient = ComputeGradients(filtered);
         auto field = BuildEdgeField(filtered, gradient, contrast);
-        out.push_back({current, std::move(gradient), std::move(field)});
-        if (l + 1 < count)
-            current = Downsample(current);
+        out.push_back({std::move(current), std::move(gradient), std::move(field), {}});
+        if (level == 0 && precise)
+            out.back().precise_gradient = std::make_shared<GradientField>(GaussianGradients(out.back().image));
+        if (level + 1 < count)
+            current = Downsample(out.back().image);
     }
     return out;
 }

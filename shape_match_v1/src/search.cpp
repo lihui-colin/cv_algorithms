@@ -2,27 +2,47 @@
 #include <limits>
 
 namespace shape_match::detail {
-/// Per-point distance/orientation score; NOT HALCON's proprietary score formula.
-/// Missing points contribute zero, so partial overlap cannot normalize to score=1.
-double EvaluatePose(const Features &f, const EdgeField &im, const Pose &pose,
-                    const std::string &metric, double sigma, double min_score) {
-    double c = std::cos(pose.theta), s = std::sin(pose.theta), positive = 0, negative = 0;
-    const bool global = metric == "ignore_global_polarity",
-               local = metric == "ignore_local_polarity";
-    double inv = 0.5 / (sigma * sigma);
-    size_t seen = 0;
-    for (const auto &v : f) {
-        double x = pose.x + pose.scale * (c * v.p.x - s * v.p.y),
-               y = pose.y + pose.scale * (s * v.p.x + c * v.p.y);
-        int ix = int(std::lround(x)), iy = int(std::lround(y));
-        if (ix >= 0 && iy >= 0 && ix < im.width && iy < im.height) {
-            int id = im.nearest[size_t(iy) * im.width + ix];
+static double SpatialWeight(double exponent) {
+    constexpr int table_size = 4096;
+    constexpr double maximum = 9.0;
+    static const std::array<float, table_size + 1> table = [] {
+        std::array<float, table_size + 1> values{};
+        for (int i = 0; i <= table_size; ++i)
+            values[size_t(i)] = float(std::exp(-maximum * i / table_size));
+        return values;
+    }();
+    const double coordinate = std::clamp(exponent, 0.0, maximum) * (table_size / maximum);
+    const int index = std::min(table_size - 1, int(coordinate));
+    const double fraction = coordinate - index;
+    return table[size_t(index)] + fraction * (table[size_t(index + 1)] - table[size_t(index)]);
+}
+
+struct ScoringPoint {
+    double x, y, nx, ny;
+    int pixel_x, pixel_y;
+};
+
+// Both search paths share distance, polarity, normalization and pruning.
+// The point accessor is inlined; it either transforms a model point or reads
+// the transform cached for the coarse angle/scale grid.
+template <class PointAt>
+static double ScorePoints(size_t count, const EdgeField &im, const std::string &metric,
+                          double sigma, double min_score, PointAt point_at) {
+    double positive = 0, negative = 0;
+    const bool global = metric == "ignore_global_polarity";
+    const bool local = metric == "ignore_local_polarity";
+    const double inv = 0.5 / (sigma * sigma);
+    for (size_t index = 0; index < count; ++index) {
+        const auto point = point_at(index);
+        if (point.pixel_x >= 0 && point.pixel_y >= 0 && point.pixel_x < im.width &&
+            point.pixel_y < im.height) {
+            const int id = im.nearest[size_t(point.pixel_y) * im.width + point.pixel_x];
             if (id >= 0) {
-                const auto &q = im.edges[id];
-                double dist = Sq(x - q.p.x) + Sq(y - q.p.y);
+                const auto &edge = im.edges[size_t(id)];
+                const double dist = Sq(point.x - edge.p.x) + Sq(point.y - edge.p.y);
                 if (dist < 18 * sigma * sigma) {
-                    double dot = (c * v.n.x - s * v.n.y) * q.n.x + (s * v.n.x + c * v.n.y) * q.n.y;
-                    double spatial = std::exp(-dist * inv);
+                    const double dot = point.nx * edge.n.x + point.ny * edge.n.y;
+                    const double spatial = SpatialWeight(dist * inv);
                     if (local)
                         positive += std::abs(dot) * spatial;
                     else {
@@ -33,13 +53,53 @@ double EvaluatePose(const Features &f, const EdgeField &im, const Pose &pose,
                 }
             }
         }
-        ++seen;
-        // Mathematical upper bound, valid also for global polarity reversal.
+        // Missing points contribute zero; the remaining points each have an
+        // upper bound of one, including for global polarity reversal.
         if (min_score > 0 &&
-            (std::max(positive, negative) + f.size() - seen) < min_score * f.size())
+            (std::max(positive, negative) + count - (index + 1)) < min_score * count)
             return 0;
     }
-    return f.empty() ? 0 : std::clamp(std::max(positive, negative) / f.size(), 0.0, 1.0);
+    return count ? std::clamp(std::max(positive, negative) / count, 0.0, 1.0) : 0;
+}
+
+double EvaluatePose(const Features &features, const EdgeField &im, const Pose &pose,
+                    const std::string &metric, double sigma, double min_score) {
+    const double c = std::cos(pose.theta), s = std::sin(pose.theta);
+    return ScorePoints(features.size(), im, metric, sigma, min_score, [&](size_t index) {
+        const auto &feature = features[index];
+        const double x = pose.x + pose.scale * (c * feature.p.x - s * feature.p.y);
+        const double y = pose.y + pose.scale * (s * feature.p.x + c * feature.p.y);
+        return ScoringPoint{x,
+                            y,
+                            c * feature.n.x - s * feature.n.y,
+                            s * feature.n.x + c * feature.n.y,
+                            int(std::lround(x)),
+                            int(std::lround(y))};
+    });
+}
+
+static std::vector<ScoringPoint> PrepareCoarsePoints(const Features &features, double angle,
+                                                     double scale) {
+    const double c = std::cos(angle), s = std::sin(angle);
+    std::vector<ScoringPoint> out;
+    out.reserve(features.size());
+    for (const auto &feature : features) {
+        const double x = scale * (c * feature.p.x - s * feature.p.y);
+        const double y = scale * (s * feature.p.x + c * feature.p.y);
+        out.push_back({x, y, c * feature.n.x - s * feature.n.y, s * feature.n.x + c * feature.n.y,
+                       int(std::lround(x)), int(std::lround(y))});
+    }
+    return out;
+}
+
+static double EvaluatePreparedCoarse(const std::vector<ScoringPoint> &points, const EdgeField &im,
+                                     int origin_x, int origin_y, const std::string &metric,
+                                     double sigma, double min_score) {
+    return ScorePoints(points.size(), im, metric, sigma, min_score, [&](size_t index) {
+        const auto &p = points[index];
+        return ScoringPoint{origin_x + p.x, origin_y + p.y,       p.nx,
+                            p.ny,           origin_x + p.pixel_x, origin_y + p.pixel_y};
+    });
 }
 static double ScaleMin(const ModelSnapshot &m) {
     return IsAuto(m.params.at("restrict_iso_scale_min")) ? Num(m.params, "iso_scale_min")
@@ -84,6 +144,29 @@ static std::vector<Candidate> MergeCandidates(std::vector<Candidate> candidates,
     }
     return selected;
 }
+
+static std::vector<Candidate> MergeCandidatesByScale(std::vector<Candidate> candidates,
+                                                     double minimum_scale, double maximum_scale,
+                                                     double distance, size_t cap) {
+    if (maximum_scale <= minimum_scale || cap < 4)
+        return MergeCandidates(std::move(candidates), distance, cap);
+    constexpr int bins = 4;
+    std::vector<Candidate> selected;
+    selected.reserve(cap);
+    const size_t per_bin = cap / bins;
+    for (int bin = 0; bin < bins; ++bin) {
+        const double low = minimum_scale + (maximum_scale - minimum_scale) * bin / bins;
+        const double high = minimum_scale + (maximum_scale - minimum_scale) * (bin + 1) / bins;
+        std::vector<Candidate> subset;
+        for (const auto &candidate : candidates)
+            if (candidate.pose.scale >= low &&
+                (bin + 1 == bins ? candidate.pose.scale <= high : candidate.pose.scale < high))
+                subset.push_back(candidate);
+        auto merged = MergeCandidates(std::move(subset), distance, per_bin);
+        selected.insert(selected.end(), merged.begin(), merged.end());
+    }
+    return selected;
+}
 std::vector<Candidate> SearchCoarsestLevel(const ModelSnapshot &m, const SearchPyramid &pyramid,
                                            int level, SearchDiagnostics &diag) {
     const auto &field = pyramid[level].field;
@@ -96,40 +179,53 @@ std::vector<Candidate> SearchCoarsestLevel(const ModelSnapshot &m, const SearchP
         ns = std::max(1, int(std::ceil((ScaleMax(m) - ScaleMin(m)) / ds)));
     Require(int64_t(na + 1) * (ns + 1) < 1000000, ErrorCode::Value,
             "Angle/scale grid exceeds implementation resource envelope");
-    Features coarse = SelectModelFeatures(ml.features, 48);
+    // This pass is a candidate generator only; all retained hypotheses are
+    // rescored with the complete model below and on every finer level.  A
+    // sparse, more tolerant probe is enough to avoid spending the bulk of the
+    // runtime proving that almost every image location is background.
+    Features coarse = SelectModelFeatures(ml.features, 12);
     double threshold =
         std::max(0.15, Num(m.params, "min_score") * (0.62 + 0.16 * Num(m.params, "greediness")));
-    std::vector<Candidate> candidates;
+    const std::string metric = Str(m.params, "metric");
+    const double fast_threshold = std::max(0.10, threshold * 0.55);
+    constexpr int stride = 8;
+    const int w = (field.width + stride - 1) / stride;
+    const int h = (field.height + stride - 1) / stride;
+    std::vector<std::pair<double, double>> transforms;
     for (int ai = 0; ai <= na; ++ai) {
         if (end == start && ai > 0)
             break;
         if (end - start >= 2 * pi - 1e-8 && ai == na)
             break;
-        double angle = start + (end - start) * ai / na;
+        const double angle = start + (end - start) * ai / na;
         for (int si = 0; si <= ns; ++si) {
             if (ScaleMax(m) == ScaleMin(m) && si > 0)
                 break;
-            double scale = ScaleMin(m) + (ScaleMax(m) - ScaleMin(m)) * si / ns;
-            // Grid stride 2 at coarse level; sigma=1.25 tolerates nearest-grid displacement.
-            int stride = 2, w = (field.width + stride - 1) / stride,
-                h = (field.height + stride - 1) / stride;
-            std::vector<float> scores(size_t(w) * h);
+            const double scale = ScaleMin(m) + (ScaleMax(m) - ScaleMin(m)) * si / ns;
+            transforms.push_back({angle, scale});
+        }
+    }
+    std::vector<std::vector<Candidate>> transform_candidates(transforms.size());
+    ParallelFor(transforms.size(), [&](size_t begin, size_t finish, size_t) {
+        std::vector<float> scores(size_t(w) * h);
+        for (size_t job = begin; job < finish; ++job) {
+            const double angle = transforms[job].first;
+            const double scale = transforms[job].second;
+            const auto prepared = PrepareCoarsePoints(coarse, -angle, scale);
+            for (int y = 0; y < h; ++y)
+                for (int x = 0; x < w; ++x)
+                    scores[size_t(y) * w + x] = float(EvaluatePreparedCoarse(
+                        prepared, field, x * stride, y * stride, metric, 5.0, fast_threshold));
+            auto &peaks = transform_candidates[job];
             for (int y = 0; y < h; ++y)
                 for (int x = 0; x < w; ++x) {
-                    Pose p{double(x * stride), double(y * stride), -angle, scale};
-                    scores[size_t(y) * w + x] = float(
-                        EvaluatePose(coarse, field, p, Str(m.params, "metric"), 1.25, threshold));
-                    ++diag.evaluated_poses;
-                }
-            for (int y = 0; y < h; ++y)
-                for (int x = 0; x < w; ++x) {
-                    double score = scores[size_t(y) * w + x];
-                    if (score < threshold)
+                    const double score = scores[size_t(y) * w + x];
+                    if (score < fast_threshold)
                         continue;
                     bool peak = true;
                     for (int dy = -1; dy <= 1 && peak; ++dy)
                         for (int dx = -1; dx <= 1; ++dx) {
-                            int xx = x + dx, yy = y + dy;
+                            const int xx = x + dx, yy = y + dy;
                             if (xx < 0 || yy < 0 || xx >= w || yy >= h || (dx == 0 && dy == 0))
                                 continue;
                             if (scores[size_t(yy) * w + xx] > score) {
@@ -138,14 +234,21 @@ std::vector<Candidate> SearchCoarsestLevel(const ModelSnapshot &m, const SearchP
                             }
                         }
                     if (peak)
-                        candidates.push_back(
+                        peaks.push_back(
                             {{double(x * stride), double(y * stride), -angle, scale}, score});
                 }
-            if (candidates.size() > 12000)
-                candidates = MergeCandidates(std::move(candidates), 2.0, 4096);
         }
+    });
+    std::vector<Candidate> candidates;
+    for (auto &peaks : transform_candidates) {
+        candidates.insert(candidates.end(), std::make_move_iterator(peaks.begin()),
+                          std::make_move_iterator(peaks.end()));
+        if (candidates.size() > 4000)
+            candidates = MergeCandidates(std::move(candidates), 8.0, 256);
     }
-    auto selected = MergeCandidates(std::move(candidates), 2.0, 512);
+    diag.evaluated_poses += transforms.size() * size_t(w) * h;
+    auto selected =
+        MergeCandidatesByScale(std::move(candidates), ScaleMin(m), ScaleMax(m), 8.0, 80);
     diag.coarse_candidates += selected.size();
     return selected;
 }
@@ -157,9 +260,10 @@ static Pose ImproveCoordinate(const ModelSnapshot &m, const Features &features,
                       std::max(Num(m.params, "angle_step"), 0.8 * factor / m.data->radius),
                       std::max(Num(m.params, "iso_scale_step"), 0.7 * factor / m.data->radius)};
     double sigma = level == 0 ? 0.8 : 1.0;
+    const std::string metric = Str(m.params, "metric");
     auto score = [&](const Pose &p) {
         ++diag.evaluated_poses;
-        return EvaluatePose(features, field, p, Str(m.params, "metric"), sigma);
+        return EvaluatePose(features, field, p, metric, sigma);
     };
     double best = score(pose);
     for (int pass = 0; pass < iterations; ++pass) {
@@ -195,6 +299,26 @@ static Pose ImproveCoordinate(const ModelSnapshot &m, const Features &features,
     }
     return pose;
 }
+static void ImproveCandidatesParallel(const ModelSnapshot &m, const Features &features,
+                                      const EdgeField &field, std::vector<Candidate> &candidates,
+                                      int level, int iterations, SearchDiagnostics &diag) {
+    const size_t workers = SearchWorkerCount(candidates.size());
+    std::vector<size_t> evaluations(workers);
+    const std::string metric = Str(m.params, "metric");
+    ParallelFor(candidates.size(), [&](size_t begin, size_t end, size_t worker) {
+        SearchDiagnostics local;
+        for (size_t index = begin; index < end; ++index) {
+            auto &candidate = candidates[index];
+            candidate.pose =
+                ImproveCoordinate(m, features, field, candidate.pose, level, iterations, local);
+            candidate.score =
+                EvaluatePose(features, field, candidate.pose, metric, level == 0 ? 0.8 : 1.0);
+        }
+        evaluations[worker] = local.evaluated_poses;
+    });
+    diag.evaluated_poses += std::accumulate(evaluations.begin(), evaluations.end(), size_t(0));
+}
+
 std::vector<Candidate> TrackToFinerLevel(const ModelSnapshot &m, const SearchPyramid &pyramid,
                                          std::vector<Candidate> candidates, int level,
                                          SearchDiagnostics &diag) {
@@ -203,19 +327,15 @@ std::vector<Candidate> TrackToFinerLevel(const ModelSnapshot &m, const SearchPyr
     for (auto &c : candidates) {
         c.pose.x *= 2;
         c.pose.y *= 2;
-        c.pose = ImproveCoordinate(m, f, field, c.pose, level, 9, diag);
-        c.score = EvaluatePose(f, field, c.pose, Str(m.params, "metric"), level == 0 ? 0.8 : 1.0);
     }
-    double threshold = Num(m.params, "min_score") * 0.68;
+    ImproveCandidatesParallel(m, f, field, candidates, level, 4, diag);
+    double threshold = Num(m.params, "min_score") * (level == 0 ? 0.85 : 0.68);
     candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
                                     [&](const auto &c) { return c.score < threshold; }),
                      candidates.end());
     return MergeCandidates(std::move(candidates), level == 0 ? 3.0 : 2.0, level == 0 ? 192 : 384);
 }
 
-struct Correspondence {
-    Vec model, image, normal;
-};
 /// Nearest-point lookup is accelerated by a Voronoi label map; neighborhood labels
 /// are checked to reduce point switching near corners and intersecting edges.
 static std::vector<Correspondence> BuildCorrespondences(const Features &features,
@@ -284,6 +404,22 @@ static NormalEquations BuildNormalEquations(const std::vector<Correspondence> &p
     NormalEquations e;
     for (const auto &p : pairs) {
         Vec a = Rotate(p.model, pose.theta) * pose.scale, position = a + Vec{pose.x, pose.y};
+#ifdef SHAPE_MATCH_TRACE_REFINEMENT
+        if (TracePointToPointResidual()) {
+            const Vec d = position - p.image;
+            const double residuals[2] = {d.x, d.y};
+            const double jacobian[2][4] = {{1, 0, -a.y, a.x}, {0, 1, a.x, a.y}};
+            for (int axis = 0; axis < 2; ++axis)
+                for (int r = 0; r < 4; ++r) {
+                    e.g[r] += jacobian[axis][r] * residuals[axis];
+                    for (int c = 0; c < 4; ++c)
+                        e.h[r][c] += jacobian[axis][r] * jacobian[axis][c];
+                }
+            e.loss += Dot(d, d);
+            ++e.count;
+            continue;
+        }
+#endif
         double residual = Dot(p.normal, position - p.image);
         // Point-to-normal Jacobian for (tx,ty,theta,log(scale)).
         double j[4] = {p.normal.x, p.normal.y, -p.normal.x * a.y + p.normal.y * a.x,
@@ -299,8 +435,21 @@ static NormalEquations BuildNormalEquations(const std::vector<Correspondence> &p
     return e;
 }
 static bool SolvePoseIncrement(NormalEquations e, double damping, bool scale_free,
-                               std::array<double, 4> &delta) {
+                               std::array<double, 4> &delta, bool normalize = false) {
     int n = scale_free ? 4 : 3;
+    double units[4] = {1, 1, 1, 1};
+    if (normalize) {
+        for (int i = 0; i < n; ++i) {
+            if (!std::isfinite(e.h[i][i]) || e.h[i][i] < 1e-12)
+                return false;
+            units[i] = std::sqrt(e.h[i][i]);
+        }
+        for (int i = 0; i < n; ++i) {
+            e.g[i] /= units[i];
+            for (int j = 0; j < n; ++j)
+                e.h[i][j] /= units[i] * units[j];
+        }
+    }
     double a[4][5]{};
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < n; ++j)
@@ -330,7 +479,7 @@ static bool SolvePoseIncrement(NormalEquations e, double damping, bool scale_fre
     }
     delta = {0, 0, 0, 0};
     for (int i = 0; i < n; ++i)
-        delta[i] = a[i][n];
+        delta[i] = a[i][n] / units[i];
     return true;
 }
 Pose InterpolateScorePeak(const ModelSnapshot &m, const PyramidLevel &image, Pose pose) {
@@ -366,8 +515,23 @@ Pose InterpolateScorePeak(const ModelSnapshot &m, const PyramidLevel &image, Pos
         }
     return pose;
 }
-Candidate RefineInstance(const ModelSnapshot &m, const PyramidLevel &image, Candidate candidate) {
+Candidate RefineInstance(const ModelSnapshot &m, const PyramidLevel &image, Candidate candidate,
+                         bool baseline_prepared) {
+#ifdef SHAPE_MATCH_TRACE_REFINEMENT
+    candidate = TraceRefinementSeed(m, image, candidate);
+    TraceRefinement(m, candidate, -1, "begin");
+#endif
     auto mode = Str(m.params, "subpixel");
+    const bool extra_refinement = Str(m.params, "refinement_method") != "nearest_point" &&
+                                  mode.find("least_squares") == 0;
+    Candidate baseline = candidate;
+    if (extra_refinement && !baseline_prepared) {
+        auto legacy = m;
+        legacy.params["refinement_method"] = std::string("nearest_point");
+        legacy.params["refinement_radius"] = 1.5;
+        baseline = RefineInstance(legacy, image, candidate);
+        candidate = baseline;
+    }
     Pose pose = candidate.pose;
     if (mode == "none") {
         pose.x = std::round(pose.x);
@@ -377,19 +541,48 @@ Candidate RefineInstance(const ModelSnapshot &m, const PyramidLevel &image, Cand
     } else if (mode == "interpolation")
         pose = InterpolateScorePeak(m, image, pose);
     else {
-        int iterations = mode == "least_squares" ? 10 : mode == "least_squares_high" ? 25 : 50;
+        int iterations = mode == "least_squares" ? 10 : mode == "least_squares_high" ? 20 : 30;
+#ifdef SHAPE_MATCH_TRACE_REFINEMENT
+        iterations = TraceIterationBudget(iterations);
+#endif
         bool scale_free = ScaleMin(m) != ScaleMax(m);
         double damping = 1e-4;
         // Dense points reduce discretization bias, while search retains sparse points.
-        Features dense = SelectModelFeatures(m.data->dense, 1200);
+        const auto method = Str(m.params, "refinement_method");
+        Features dense = SelectModelFeatures(method == "gradient_gaussian" ? m.data->gaussian_dense
+                                                                           : m.data->dense, 1200);
+        Require(dense.size() >= 12, ErrorCode::Geometry, "Insufficient refinement model points");
+        const auto metric = Str(m.params, "metric");
+        const bool continuous = method != "nearest_point";
+#ifdef SHAPE_MATCH_TRACE_REFINEMENT
+        std::vector<Correspondence> frozen_pairs;
+#endif
         for (int iteration = 0; iteration < iterations; ++iteration) {
-            auto pairs = BuildCorrespondences(dense, image.field, pose, Str(m.params, "metric"),
-                                              iteration < 3 ? 3.0 : 1.5);
+#ifdef SHAPE_MATCH_TRACE_REFINEMENT
+            TraceRefinement(m, {pose, candidate.score}, iteration, "iteration");
+#endif
+            double radius = iteration < 3 ? std::max(3.0, Num(m.params, "refinement_radius"))
+                                                : Num(m.params, "refinement_radius");
+#ifdef SHAPE_MATCH_TRACE_REFINEMENT
+            radius = TraceCorrespondenceRadius(radius);
+#endif
+            auto correspond = [&](const Pose &p) {
+                return continuous ? ContinuousCorrespondences(dense, image, p, metric, radius, method)
+                                  : BuildCorrespondences(dense, image.field, p, metric, radius);
+            };
+            auto pairs = correspond(pose);
+#ifdef SHAPE_MATCH_TRACE_REFINEMENT
+            if (update_policy == "frozen") {
+                if (iteration == 0)
+                    frozen_pairs = pairs;
+                pairs = frozen_pairs;
+            }
+#endif
             if (pairs.size() < 12 || pairs.size() < dense.size() / 5)
                 break;
             auto equations = BuildNormalEquations(pairs, pose);
             std::array<double, 4> step{};
-            if (!SolvePoseIncrement(equations, damping, scale_free, step))
+            if (!SolvePoseIncrement(equations, damping, scale_free, step, continuous))
                 break;
             double translation = std::hypot(step[0], step[1]);
             if (translation > 1) {
@@ -407,7 +600,30 @@ Candidate RefineInstance(const ModelSnapshot &m, const PyramidLevel &image, Cand
                 continue;
             }
             double loss = BuildNormalEquations(pairs, trial).loss;
-            if (loss <= equations.loss) {
+            bool accepted = loss <= equations.loss;
+            if (continuous && accepted) {
+                // Compare on a fixed model support as well as frozen correspondences.
+                // Dropping difficult points must not manufacture a lower objective.
+                auto trial_pairs = correspond(trial);
+                accepted = RefinementSupportLoss(trial_pairs, trial, dense.size(), radius) <=
+                           RefinementSupportLoss(pairs, pose, dense.size(), radius) + 1e-12 * dense.size();
+            }
+#ifdef SHAPE_MATCH_TRACE_REFINEMENT
+            const auto diagnostic_trial_pairs = correspond(trial);
+            const auto diagnostic_current_pairs = correspond(pose);
+            const double reassociated_loss = BuildNormalEquations(diagnostic_trial_pairs, trial).loss;
+            const double support_before = BuildNormalEquations(diagnostic_current_pairs, pose).loss +
+                (dense.size() - diagnostic_current_pairs.size()) * radius * radius;
+            const double support_after = reassociated_loss +
+                (dense.size() - diagnostic_trial_pairs.size()) * radius * radius;
+            if (update_policy == "support")
+                accepted = accepted && support_after <= support_before + 1e-12 * dense.size();
+            TraceUpdate(iteration, radius, pairs.size(), diagnostic_trial_pairs.size(), equations.loss,
+                        loss, reassociated_loss, support_before, support_after, damping,
+                        std::max({std::hypot(step[0], step[1]), std::abs(step[2]) * m.data->radius,
+                                  std::abs(step[3]) * m.data->radius}), accepted);
+#endif
+            if (accepted) {
                 pose = trial;
                 damping = std::max(1e-8, damping / 3);
                 if (std::hypot(step[0], step[1]) < 1e-5 &&
@@ -424,6 +640,14 @@ Candidate RefineInstance(const ModelSnapshot &m, const PyramidLevel &image, Cand
     candidate.pose = pose;
     candidate.score =
         EvaluatePose(m.data->levels[0].features, image.field, pose, Str(m.params, "metric"), 0.8);
+#ifdef SHAPE_MATCH_TRACE_REFINEMENT
+    TraceRefinement(m, candidate, -1, "end");
+#endif
+    // Experimental observations must not turn an accepted baseline match into
+    // a below-threshold detection. Keep the baseline pose, not a stale score.
+    if (extra_refinement && candidate.score < Num(m.params, "min_score") &&
+        baseline.score >= Num(m.params, "min_score"))
+        return baseline;
     return candidate;
 }
 
@@ -481,13 +705,17 @@ void FindGenericShapeModel(const HObject &object, const HTuple &ids, HTuple *res
     auto result = std::make_shared<MatchResult>();
     result->models = models;
     int levels = 1;
+    bool precise = false;
     double contrast = 255;
     for (const auto &m : models) {
         levels = std::max(levels, int(m.data->levels.size()));
         contrast = std::min(contrast, Num(m.params, "min_contrast"));
+        precise |= Str(m.params, "refinement_method") == "gradient_gaussian" &&
+                   Str(m.params, "subpixel").find("least_squares") == 0 &&
+                   Num(m.params, "pyramid_level_lowest") == 1;
     }
     auto t = Clock::now();
-    auto pyramid = BuildSearchPyramid(image, levels, contrast);
+    auto pyramid = BuildSearchPyramid(image, levels, contrast, precise);
     result->diagnostics.pyramid_ms = Elapsed(t);
     std::vector<Match> matches;
     bool allow_border = false;
@@ -504,6 +732,7 @@ void FindGenericShapeModel(const HObject &object, const HTuple &ids, HTuple *res
             t = Clock::now();
             specific = BuildSearchPyramid(image, levels, Num(m.params, "min_contrast"));
             specific[top] = pyramid[top];
+            specific[0].precise_gradient = pyramid[0].precise_gradient;
             working = &specific;
             result->diagnostics.pyramid_ms += Elapsed(t);
         }
@@ -513,24 +742,42 @@ void FindGenericShapeModel(const HObject &object, const HTuple &ids, HTuple *res
         auto candidates = SearchCoarsestLevel(m, *working, top, result->diagnostics);
         result->diagnostics.top_level_ms += Elapsed(t);
         t = Clock::now();
-        for (auto &c : candidates) {
-            c.pose = ImproveCoordinate(m, m.data->levels[top].features, (*working)[top].field,
-                                       c.pose, top, 9, result->diagnostics);
-            c.score = EvaluatePose(m.data->levels[top].features, (*working)[top].field, c.pose,
-                                   Str(m.params, "metric"), 1.0);
-        }
-        candidates = MergeCandidates(std::move(candidates), 2, 384);
+        ImproveCandidatesParallel(m, m.data->levels[top].features, (*working)[top].field,
+                                  candidates, top, 9, result->diagnostics);
+        // The broad coarse probe deliberately over-generates hypotheses.  Once
+        // they have been optimized and rescored with the complete top-level
+        // model, keep a compact deterministic beam for the expensive fine
+        // levels.
+        candidates = MergeCandidates(std::move(candidates), 4, 48);
         for (int l = top - 1; l >= lowest; --l)
             candidates =
                 TrackToFinerLevel(m, *working, std::move(candidates), l, result->diagnostics);
         result->diagnostics.tracking_ms += Elapsed(t);
         t = Clock::now();
+        const bool prepare_baseline = lowest == 0 && Str(m.params, "refinement_method") != "nearest_point" &&
+                                      Str(m.params, "subpixel").find("least_squares") == 0;
+        if (prepare_baseline) {
+            auto legacy = m;
+            legacy.params["refinement_method"] = std::string("nearest_point");
+            legacy.params["refinement_radius"] = 1.5;
+            ParallelFor(candidates.size(), [&](size_t begin, size_t end, size_t) {
+                for (size_t i = begin; i < end; ++i)
+                    candidates[i] = RefineInstance(legacy, (*working)[0], candidates[i]);
+            });
+            // Merge converged duplicates before the more expensive observations;
+            // distinct angular symmetry branches remain separate.
+            const size_t capacity = candidates.size();
+            candidates = MergeCandidates(std::move(candidates), 1.0, capacity);
+        }
+        ParallelFor(candidates.size(), [&](size_t begin, size_t end, size_t) {
+            for (size_t index = begin; index < end; ++index)
+                if (lowest == 0)
+                    candidates[index] = RefineInstance(m, (*working)[0], candidates[index], prepare_baseline);
+        });
         for (auto c : candidates) {
             double factor = double(1 << lowest);
             c.pose.x *= factor;
             c.pose.y *= factor;
-            if (lowest == 0)
-                c = RefineInstance(m, (*working)[0], c);
             // A non-default lower stopping level deliberately skips fine refinement.
             int x = int(std::lround(c.pose.x)), y = int(std::lround(c.pose.y));
             if (x < 0 || y < 0 || x >= image.width || y >= image.height ||
@@ -560,5 +807,8 @@ void FindGenericShapeModel(const HObject &object, const HTuple &ids, HTuple *res
 }
 SearchDiagnostics GetSearchDiagnostics(const HTuple &id) {
     return detail::ResolveResult(id)->diagnostics;
+}
+size_t GetSearchThreadCount() {
+    return detail::SearchWorkerCount(std::numeric_limits<size_t>::max());
 }
 } // namespace shape_match

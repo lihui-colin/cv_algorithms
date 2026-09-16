@@ -1,0 +1,5 @@
+model,parameter,value
+ring,halcon_version,24.11.1.1
+ring,subpixel,least_squares
+nut,halcon_version,24.11.1.1
+nut,subpixel,least_squares

@@ -104,9 +104,9 @@ def report(root, results):
               '- 模板与搜索图分别由连续几何生成，8×8 像素积分近似；未使用整数图像 warp 生成真值。',
               '- 该小型无噪声、单形状合成集通过 1/30 px RMSE 门槛，不代表真实相机或所有目标达到该精度。',
               '- 尚未进行可溯源实拍位移验证，也未安装 HALCON 运行时执行逐参数差分测试。', '',
-              '## 性能', '', f'- 本次完整样图搜索：**{timing["total_ms"]:.3f} ms**；10 ms 目标尚未达到。',
+              '## 性能', '', f'- 本次完整样图搜索：**{timing["total_ms"]:.3f} ms**；30 ms 目标' + ('已达到。' if timing['total_ms'] <= 30 else '尚未达到。'),
               f'- 金字塔 {timing["pyramid_ms"]:.3f} ms；粗搜 {timing["top_level_ms"]:.3f} ms；跟踪 {timing["tracking_ms"]:.3f} ms；精定位 {timing["refinement_ms"]:.3f} ms。',
-              '- CPU 单线程核心；图像 640×480；2 个模型；建模和文件 I/O 不计入上述搜索时间。', '',
+              f'- CPU {timing.get("threads", 1)} 线程；图像 640×480；2 个模型；建模和文件 I/O 不计入上述搜索时间。', '',
               '## 契约与兼容边界', '',
               '- 公开算子均有工作实现，无空函数或固定样例结果返回。',
               '- 接口对齐范围与已知行为差异见 docs/API.md；这不是完整 HALCON SDK/ABI 替代。',
@@ -114,9 +114,10 @@ def report(root, results):
               '- LeakSanitizer 因执行环境使用 ptrace 无法运行；随后关闭泄漏检查执行 ASan/UBSan，未声称完成泄漏检测。', '']
     benchmark=summary.get('repeated_benchmark')
     if benchmark:
+        p95 = f'；P95 {benchmark["p95_ms"]:.3f} ms' if 'p95_ms' in benchmark else ''
         lines += ['## 同进程重复性能基线', '',
-                  f'- 预热 {benchmark["warmup"]} 次，测量 {benchmark["iterations"]} 次；单线程。',
-                  f'- 中位数 **{benchmark["median_ms"]:.3f} ms**；最小 {benchmark["min_ms"]:.3f} ms；最大 {benchmark["max_ms"]:.3f} ms。',
+                  f'- 预热 {benchmark["warmup"]} 次，测量 {benchmark["iterations"]} 次；{benchmark.get("threads", 1)} 线程。',
+                  f'- 中位数 **{benchmark["median_ms"]:.3f} ms**{p95}；最小 {benchmark["min_ms"]:.3f} ms；最大 {benchmark["max_ms"]:.3f} ms。',
                   '- 每次均验证返回 7 个实例；不包含建模及文件 I/O。',
                   '- 处理器及编译参数见 environment.json。', '']
     (results/'VALIDATION.md').write_text('\n'.join(lines))

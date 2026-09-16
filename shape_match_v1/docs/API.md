@@ -84,10 +84,24 @@ PNG 由 `scripts/prepare_samples.py` 转为 PGM，alpha 独立转为 Domain，�
 | none | 最终平移量化为像素，角度量化到 angle_step |
 | interpolation | 局部得分的逐坐标二次插值 |
 | least_squares | 点到法线最小二乘，最多 10 轮 |
-| least_squares_high | 同一目标函数，最多 25 轮 |
-| least_squares_very_high | 同一目标函数，最多 50 轮 |
+| least_squares_high | 同一目标函数，最多 20 轮 |
+| least_squares_very_high | 同一目标函数，最多 30 轮 |
 
 迭代预算为本实现取值，HALCON 未公开对应内部数字。优化收敛时可以提前结束；模式更高不意味着每个样例结果一定不同或一定更准。
+
+### 实验性精定位扩展（不是 HALCON 参数）
+
+`refinement_method` 默认 `nearest_point`，保留现有路径；可选 `contour`（局部轮廓线段投影）、
+`gradient`（中心差分梯度的连续法向剖面）和 `gradient_gaussian`（高斯导数与连续法向剖面）。
+仅在 `least_squares*` 且搜索到原分辨率时启用。`refinement_radius` 默认 1.5，合法范围
+0.5～10 像素；新路径前三轮搜索半径至少为 3 像素。它不是 HALCON 的 `max_deformation`。
+这两个参数可在训练后修改，不触发重训练；当前训练会预计算高斯精定位特征，即使使用默认模式。
+
+新路径以默认精定位结果初始化，使用归一化四自由度求解和含缺失点惩罚的重新关联验收。
+当新位姿评分低于 `min_score`、但原位姿仍满足阈值时，回退完整原位姿和评分。
+固定尺度仍受原范围约束；这些机制不保证任意输入的精度或召回不退化。
+新路径未通过默认替换验收，实图、独立合成集和性能结果见
+[精度实施报告](PRECISION_IMPLEMENTATION.md)。
 
 ## 6. 结果与坐标
 

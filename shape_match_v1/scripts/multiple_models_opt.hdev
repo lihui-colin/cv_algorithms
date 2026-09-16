@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hdevelop file_version="1.2" halcon_version="24.11.1.0">
+<procedure name="main">
+<interface/>
+<body>
+<c>* ------------------------------------------------------------------------------------------------</c>
+<c>* This example program searches for two types of objects simultaneously.</c>
+<c>* ------------------------------------------------------------------------------------------------</c>
+<c>* General configuration of HDevelop.</c>
+<l>dev_update_window ('off')</l>
+<c>* Image acquisition and window size.</c>
+<l>read_image (ModelImage, 'rings_and_nuts')</l>
+<l>OutputDirectory := 'C:/Users/hui.li/AppData/Local/Programs/MVTec/HALCON-24.11-Progress-Steady/examples/solution_guide/matching/multiple_models_output'</l>
+<l>write_image (ModelImage, 'png', 0, OutputDirectory + '/original')</l>
+<l>get_image_pointer1 (ModelImage, Pointer, Type, Width, Height)</l>
+<l>dev_close_window ()</l>
+<l>dev_open_window (0, 0, Width, Height, 'white', WindowHandle)</l>
+<l>dev_set_part (0, 0, Height - 1, Width - 1)</l>
+<l>dev_display (ModelImage)</l>
+<c>* Colors and other settings for the visualization.</c>
+<l>dev_set_color ('blue')</l>
+<l>dev_set_draw ('margin')</l>
+<l>dev_set_line_width (2)</l>
+<l>set_display_font (WindowHandle, 14, 'mono', 'true', 'false')</l>
+<l>disp_continue_message (WindowHandle, 'black', 'true')</l>
+<l>stop ()</l>
+<c>* -------------------  Start of the application  ----------------</c>
+<c>* Select the model objects.</c>
+<l>gen_circle (ModelROIRing, 121, 299, 55)</l>
+<l>gen_circle (ModelROINut, 324, 279, 52)</l>
+<l>reduce_domain (ModelImage, ModelROIRing, TemplateRingImage)</l>
+<l>crop_domain (TemplateRingImage, TemplateRingImageCropped)</l>
+<l>write_image (TemplateRingImageCropped, 'png', 0, OutputDirectory + '/template_ring')</l>
+<l>reduce_domain (ModelImage, ModelROINut, TemplateNutImage)</l>
+<l>crop_domain (TemplateNutImage, TemplateNutImageCropped)</l>
+<l>write_image (TemplateNutImageCropped, 'png', 0, OutputDirectory + '/template_nut')</l>
+<l>dev_display (ModelImage)</l>
+<l>dev_display (ModelROIRing)</l>
+<l>dev_display (ModelROINut)</l>
+<l>disp_continue_message (WindowHandle, 'black', 'true')</l>
+<l>stop ()</l>
+<c>* Step 1: Create and train the models.</c>
+<l>reduce_domain (ModelImage, ModelROIRing, ImageROIRing)</l>
+<l>create_generic_shape_model (ModelIDRing)</l>
+<l>get_generic_shape_model_param (ModelIDRing, 'model_identifier', RingIdentifier)</l>
+<l>set_generic_shape_model_param (ModelIDRing, 'iso_scale_min', 0.8)</l>
+<l>set_generic_shape_model_param (ModelIDRing, 'iso_scale_max', 1.2)</l>
+<l>train_generic_shape_model (ImageROIRing, ModelIDRing)</l>
+<l>inspect_shape_model (ImageROIRing, PyramidImage, ModelRegionRing, 1, 30)</l>
+<l>get_generic_shape_model_object (ShapeModelRing, ModelIDRing, 'contours')</l>
+<l>count_obj (ShapeModelRing, NumContoursRing)</l>
+<l>write_contour_xld_dxf (ShapeModelRing, OutputDirectory + '/template_ring_contours.dxf')</l>
+<l>open_file (OutputDirectory + '/template_ring_contours.csv', 'output', RingContourFileHandle)</l>
+<l>fwrite_string (RingContourFileHandle, 'contour_index,point_index,row,column')</l>
+<l>fnew_line (RingContourFileHandle)</l>
+<l>for I := 1 to NumContoursRing by 1</l>
+<l>    select_obj (ShapeModelRing, Contour, I)</l>
+<l>    get_contour_xld (Contour, Rows, Columns)</l>
+<l>    for J := 0 to |Rows| - 1 by 1</l>
+<l>        fwrite_string (RingContourFileHandle, (I - 1) + ',' + J + ',' + Rows[J]$'.6f' + ',' + Columns[J]$'.6f')</l>
+<l>        fnew_line (RingContourFileHandle)</l>
+<l>    endfor</l>
+<l>endfor</l>
+<l>close_file (RingContourFileHandle)</l>
+<l>open_file (OutputDirectory + '/template_ring_parameters.csv', 'output', RingParamFileHandle)</l>
+<l>fwrite_string (RingParamFileHandle, 'parameter,actual_value,setting')</l>
+<l>fnew_line (RingParamFileHandle)</l>
+<l>get_generic_shape_model_param (ModelIDRing, 'num_levels', RingNumLevels)</l>
+<l>get_generic_shape_model_param (ModelIDRing, 'num_levels_param', RingNumLevelsSetting)</l>
+<l>fwrite_string (RingParamFileHandle, 'num_levels,' + RingNumLevels + ',' + RingNumLevelsSetting)</l>
+<l>fnew_line (RingParamFileHandle)</l>
+<l>get_generic_shape_model_param (ModelIDRing, 'contrast_low', RingContrastLow)</l>
+<l>RingContrastLowSetting := 'auto'</l>
+<l>fwrite_string (RingParamFileHandle, 'contrast_low,' + RingContrastLow + ',' + RingContrastLowSetting)</l>
+<l>fnew_line (RingParamFileHandle)</l>
+<l>get_generic_shape_model_param (ModelIDRing, 'contrast_high', RingContrastHigh)</l>
+<l>RingContrastHighSetting := 'auto'</l>
+<l>fwrite_string (RingParamFileHandle, 'contrast_high,' + RingContrastHigh + ',' + RingContrastHighSetting)</l>
+<l>fnew_line (RingParamFileHandle)</l>
+<l>get_generic_shape_model_param (ModelIDRing, 'min_size', RingMinSize)</l>
+<l>RingMinSizeSetting := 'auto'</l>
+<l>fwrite_string (RingParamFileHandle, 'min_size,' + RingMinSize + ',' + RingMinSizeSetting)</l>
+<l>fnew_line (RingParamFileHandle)</l>
+<l>get_generic_shape_model_param (ModelIDRing, 'optimization', RingOptimization)</l>
+<l>RingOptimizationSetting := 'auto'</l>
+<l>fwrite_string (RingParamFileHandle, 'optimization,' + RingOptimization + ',' + RingOptimizationSetting)</l>
+<l>fnew_line (RingParamFileHandle)</l>
+<l>get_generic_shape_model_param (ModelIDRing, 'metric', RingMetric)</l>
+<l>RingMetricSetting := 'auto'</l>
+<l>fwrite_string (RingParamFileHandle, 'metric,' + RingMetric + ',' + RingMetricSetting)</l>
+<l>fnew_line (RingParamFileHandle)</l>
+<l>get_generic_shape_model_param (ModelIDRing, 'angle_step', RingAngleStep)</l>
+<l>RingAngleStepSetting := 'auto'</l>
+<l>fwrite_string (RingParamFileHandle, 'angle_step,' + RingAngleStep + ',' + RingAngleStepSetting)</l>
+<l>fnew_line (RingParamFileHandle)</l>
+<l>close_file (RingParamFileHandle)</l>
+<l>dev_clear_window ()</l>
+<l>dev_display (ModelRegionRing)</l>
+<l>disp_continue_message (WindowHandle, 'black', 'true')</l>
+<l>stop ()</l>
+<l>reduce_domain (ModelImage, ModelROINut, ImageROINut)</l>
+<l>create_generic_shape_model (ModelIDNut)</l>
+<l>get_generic_shape_model_param (ModelIDNut, 'model_identifier', NutIdentifier)</l>
+<l>set_generic_shape_model_param (ModelIDNut, 'iso_scale_min', 0.6)</l>
+<l>set_generic_shape_model_param (ModelIDNut, 'iso_scale_max', 1.4)</l>
+<l>train_generic_shape_model (ImageROINut, ModelIDNut)</l>
+<l>inspect_shape_model (ImageROINut, PyramidImage, ModelRegionNut, 1, 30)</l>
+<l>get_generic_shape_model_object (ShapeModelNut, ModelIDNut, 'contours')</l>
+<l>count_obj (ShapeModelNut, NumContoursNut)</l>
+<l>write_contour_xld_dxf (ShapeModelNut, OutputDirectory + '/template_nut_contours.dxf')</l>
+<l>open_file (OutputDirectory + '/template_nut_contours.csv', 'output', NutContourFileHandle)</l>
+<l>fwrite_string (NutContourFileHandle, 'contour_index,point_index,row,column')</l>
+<l>fnew_line (NutContourFileHandle)</l>
+<l>for I := 1 to NumContoursNut by 1</l>
+<l>    select_obj (ShapeModelNut, Contour, I)</l>
+<l>    get_contour_xld (Contour, Rows, Columns)</l>
+<l>    for J := 0 to |Rows| - 1 by 1</l>
+<l>        fwrite_string (NutContourFileHandle, (I - 1) + ',' + J + ',' + Rows[J]$'.6f' + ',' + Columns[J]$'.6f')</l>
+<l>        fnew_line (NutContourFileHandle)</l>
+<l>    endfor</l>
+<l>endfor</l>
+<l>close_file (NutContourFileHandle)</l>
+<l>open_file (OutputDirectory + '/template_nut_parameters.csv', 'output', NutParamFileHandle)</l>
+<l>fwrite_string (NutParamFileHandle, 'parameter,actual_value,setting')</l>
+<l>fnew_line (NutParamFileHandle)</l>
+<l>get_generic_shape_model_param (ModelIDNut, 'num_levels', NutNumLevels)</l>
+<l>get_generic_shape_model_param (ModelIDNut, 'num_levels_param', NutNumLevelsSetting)</l>
+<l>fwrite_string (NutParamFileHandle, 'num_levels,' + NutNumLevels + ',' + NutNumLevelsSetting)</l>
+<l>fnew_line (NutParamFileHandle)</l>
+<l>get_generic_shape_model_param (ModelIDNut, 'contrast_low', NutContrastLow)</l>
+<l>NutContrastLowSetting := 'auto'</l>
+<l>fwrite_string (NutParamFileHandle, 'contrast_low,' + NutContrastLow + ',' + NutContrastLowSetting)</l>
+<l>fnew_line (NutParamFileHandle)</l>
+<l>get_generic_shape_model_param (ModelIDNut, 'contrast_high', NutContrastHigh)</l>
+<l>NutContrastHighSetting := 'auto'</l>
+<l>fwrite_string (NutParamFileHandle, 'contrast_high,' + NutContrastHigh + ',' + NutContrastHighSetting)</l>
+<l>fnew_line (NutParamFileHandle)</l>
+<l>get_generic_shape_model_param (ModelIDNut, 'min_size', NutMinSize)</l>
+<l>NutMinSizeSetting := 'auto'</l>
+<l>fwrite_string (NutParamFileHandle, 'min_size,' + NutMinSize + ',' + NutMinSizeSetting)</l>
+<l>fnew_line (NutParamFileHandle)</l>
+<l>get_generic_shape_model_param (ModelIDNut, 'optimization', NutOptimization)</l>
+<l>NutOptimizationSetting := 'auto'</l>
+<l>fwrite_string (NutParamFileHandle, 'optimization,' + NutOptimization + ',' + NutOptimizationSetting)</l>
+<l>fnew_line (NutParamFileHandle)</l>
+<l>get_generic_shape_model_param (ModelIDNut, 'metric', NutMetric)</l>
+<l>NutMetricSetting := 'auto'</l>
+<l>fwrite_string (NutParamFileHandle, 'metric,' + NutMetric + ',' + NutMetricSetting)</l>
+<l>fnew_line (NutParamFileHandle)</l>
+<l>get_generic_shape_model_param (ModelIDNut, 'angle_step', NutAngleStep)</l>
+<l>NutAngleStepSetting := 'auto'</l>
+<l>fwrite_string (NutParamFileHandle, 'angle_step,' + NutAngleStep + ',' + NutAngleStepSetting)</l>
+<l>fnew_line (NutParamFileHandle)</l>
+<l>close_file (NutParamFileHandle)</l>
+<l>dev_display (ModelRegionNut)</l>
+<c>* Step 2: Save the relevant information in tuples.</c>
+<l>ModelIDs := [ModelIDRing,ModelIDNut]</l>
+<l>concat_obj (ShapeModelRing, ShapeModelNut, ShapeModels)</l>
+<l>StartContoursInTuple := [1,NumContoursRing + 1]</l>
+<l>NumContoursInTuple := [NumContoursRing,NumContoursNut]</l>
+<l>disp_continue_message (WindowHandle, 'black', 'true')</l>
+<l>stop ()</l>
+<l>read_image (SearchImage, 'rings_and_nuts')</l>
+<l>dev_display (SearchImage)</l>
+<c>* Step 3: Create two search ROIs (upper and lower part of the image).</c>
+<l>gen_rectangle1 (SearchROIRing, 110, 10, 130, Width - 10)</l>
+<l>gen_rectangle1 (SearchROINut, 315, 10, 335, Width - 10)</l>
+<c>* "add" the ROIs to the search image.</c>
+<l>concat_obj (SearchROIRing, SearchROINut, SearchROIs)</l>
+<l>dev_set_color ('blue')</l>
+<l>dev_display (SearchROIs)</l>
+<l>add_channels (SearchROIs, SearchImage, SearchImageReduced)</l>
+<l>disp_continue_message (WindowHandle, 'black', 'true')</l>
+<l>stop ()</l>
+<c>* Step 4: Find all objects.</c>
+<l>dev_display (SearchImage)</l>
+<l>dev_set_color ('cyan')</l>
+<l>set_generic_shape_model_param (ModelIDRing, 'angle_start', -rad(22.5))</l>
+<l>set_generic_shape_model_param (ModelIDRing, 'angle_end', rad(22.5))</l>
+<l>set_generic_shape_model_param (ModelIDNut, 'angle_start', -rad(30))</l>
+<l>set_generic_shape_model_param (ModelIDNut, 'angle_end', rad(60))</l>
+<l>find_generic_shape_model (SearchImageReduced, ModelIDs, MatchResultID, NumMatchResult)</l>
+<l>open_file (OutputDirectory + '/matching_results.csv', 'output', ResultFileHandle)</l>
+<l>fwrite_string (ResultFileHandle, 'index,model,row,column,angle_deg,scale_row,scale_column,score')</l>
+<l>fnew_line (ResultFileHandle)</l>
+<l>gen_empty_obj (Objects)</l>
+<l>gen_empty_obj (FinalContours)</l>
+<l>for i := 0 to NumMatchResult - 1 by 1</l>
+<c>    * Access the results, i.e., the XLD contours belonging to the model.</c>
+<l>    get_generic_shape_model_result (MatchResultID, i, 'model_identifier', Model)</l>
+<l>    get_generic_shape_model_result (MatchResultID, i, 'row', MatchRow)</l>
+<l>    get_generic_shape_model_result (MatchResultID, i, 'column', MatchColumn)</l>
+<l>    get_generic_shape_model_result (MatchResultID, i, 'angle', MatchAngle)</l>
+<l>    get_generic_shape_model_result (MatchResultID, i, 'scale_row', MatchScaleRow)</l>
+<l>    get_generic_shape_model_result (MatchResultID, i, 'scale_column', MatchScaleColumn)</l>
+<l>    get_generic_shape_model_result (MatchResultID, i, 'score', MatchScore)</l>
+<l>    if (Model = RingIdentifier)</l>
+<l>        ModelName := 'ring'</l>
+<l>    else</l>
+<l>        ModelName := 'nut'</l>
+<l>    endif</l>
+<l>    get_generic_shape_model_result_object (Objects, MatchResultID, i, 'contours')</l>
+<l>    write_contour_xld_dxf (Objects, OutputDirectory + '/final_contour_' + i + '_' + ModelName + '.dxf')</l>
+<l>    concat_obj (FinalContours, Objects, FinalContours)</l>
+<l>    ResultLine := i + ',' + ModelName + ',' + MatchRow$'.3f' + ',' + MatchColumn$'.3f' + ',' + deg(MatchAngle)$'.3f' + ',' + MatchScaleRow$'.5f' + ',' + MatchScaleColumn$'.5f' + ',' + MatchScore$'.5f'</l>
+<l>    fwrite_string (ResultFileHandle, ResultLine)</l>
+<l>    fnew_line (ResultFileHandle)</l>
+<l>    dev_set_color ('yellow')</l>
+<l>    dev_display (Objects)</l>
+<l>    if (i &lt; NumMatchResult - 1)</l>
+<l>        disp_continue_message (WindowHandle, 'black', 'true')</l>
+<l>        stop ()</l>
+<l>    else</l>
+<l>        disp_end_of_program_message (WindowHandle, 'black', 'true')</l>
+<l>    endif</l>
+<l>endfor</l>
+<l>close_file (ResultFileHandle)</l>
+<l>write_contour_xld_dxf (FinalContours, OutputDirectory + '/final_contours.dxf')</l>
+<l>dump_window (WindowHandle, 'png', OutputDirectory + '/recognition_result.png')</l>
+<c>* Step 5: Export actual parameters and compare four subpixel modes.</c>
+<c>* Existing baseline results above are retained. Same-named mode CSVs are overwritten.</c>
+<c>* This export block has not been executed in a HALCON runtime here.</c>
+<l>ModeOutputDirectory := OutputDirectory</l>
+<l>SubpixelModes := ['interpolation','least_squares','least_squares_high','least_squares_very_high']</l>
+<l>OriginalSubpixelModes := []</l>
+<l>get_system ('file_version', ModeHalconVersion)</l>
+<l>open_file (ModeOutputDirectory + '/actual_parameters.csv', 'output', ModeParamFile)</l>
+<l>fwrite_string (ModeParamFile, 'model,parameter,value')</l>
+<l>fnew_line (ModeParamFile)</l>
+<l>for ModeModelIndex := 0 to |ModelIDs|-1 by 1</l>
+<l>    get_generic_shape_model_param (ModelIDs[ModeModelIndex], 'model_identifier', ModeModelName)</l>
+<l>    if (ModeModelName == RingIdentifier)</l>
+<l>        ModeModelName := 'ring'</l>
+<l>    else</l>
+<l>        ModeModelName := 'nut'</l>
+<l>    endif</l>
+<l>    get_generic_shape_model_param (ModelIDs[ModeModelIndex], 'subpixel', OriginalSubpixelMode)</l>
+<l>    OriginalSubpixelModes := [OriginalSubpixelModes, OriginalSubpixelMode]</l>
+<l>    fwrite_string (ModeParamFile, ModeModelName + ',halcon_version,' + ModeHalconVersion)</l>
+<l>    fnew_line (ModeParamFile)</l>
+<l>    ModeParamNames := ['subpixel','min_contrast','metric','origin_row','origin_column','iso_scale_min','iso_scale_max','iso_scale_step','restrict_iso_scale_min','restrict_iso_scale_max','angle_start','angle_end','angle_step','pyramid_level_lowest','pyramid_level_highest','max_deformation','strict_boundaries','min_score','num_matches']</l>
+<l>    for ModeParamIndex := 0 to |ModeParamNames|-1 by 1</l>
+<l>        get_generic_shape_model_param (ModelIDs[ModeModelIndex], ModeParamNames[ModeParamIndex], ModeParamValue)</l>
+<l>        tuple_type (ModeParamValue, ModeParamType)</l>
+<l>        if (ModeParamType == 'string')</l>
+<l>            ModeParamText := ModeParamValue</l>
+<l>        else</l>
+<l>            ModeParamText := ModeParamValue$'.17g'</l>
+<l>        endif</l>
+<l>        fwrite_string (ModeParamFile, ModeModelName + ',' + ModeParamNames[ModeParamIndex] + ',' + ModeParamText)</l>
+<l>        fnew_line (ModeParamFile)</l>
+<l>    endfor</l>
+<l>endfor</l>
+<l>close_file (ModeParamFile)</l>
+<l>for ModeIndex := 0 to |SubpixelModes|-1 by 1</l>
+<l>    for ModeModelIndex := 0 to |ModelIDs|-1 by 1</l>
+<l>        set_generic_shape_model_param (ModelIDs[ModeModelIndex], 'subpixel', SubpixelModes[ModeIndex])</l>
+<l>    endfor</l>
+<c>    * Preserve the ORIGINAL image, domains, model definitions and search settings.</c>
+<l>    find_generic_shape_model (SearchImageReduced, ModelIDs, ModeResultID, ModeMatchCount)</l>
+<l>    open_file (ModeOutputDirectory + '/halcon_' + SubpixelModes[ModeIndex] + '.csv', 'output', ModeResultFile)</l>
+<l>    fwrite_string (ModeResultFile, 'index,model,row,column,angle_deg,scale_row,scale_column,score')</l>
+<l>    fnew_line (ModeResultFile)</l>
+<l>    for ModeMatchIndex := 0 to ModeMatchCount-1 by 1</l>
+<l>        get_generic_shape_model_result (ModeResultID, ModeMatchIndex, 'model_identifier', ModeModelName)</l>
+<l>        if (ModeModelName == RingIdentifier)</l>
+<l>            ModeModelName := 'ring'</l>
+<l>        else</l>
+<l>            ModeModelName := 'nut'</l>
+<l>        endif</l>
+<l>        get_generic_shape_model_result (ModeResultID, ModeMatchIndex, 'row', ModeRow)</l>
+<l>        get_generic_shape_model_result (ModeResultID, ModeMatchIndex, 'column', ModeColumn)</l>
+<l>        get_generic_shape_model_result (ModeResultID, ModeMatchIndex, 'angle', ModeAngle)</l>
+<l>        get_generic_shape_model_result (ModeResultID, ModeMatchIndex, 'scale_row', ModeScaleRow)</l>
+<l>        get_generic_shape_model_result (ModeResultID, ModeMatchIndex, 'scale_column', ModeScaleColumn)</l>
+<l>        get_generic_shape_model_result (ModeResultID, ModeMatchIndex, 'score', ModeScore)</l>
+<l>        fwrite_string (ModeResultFile, ModeMatchIndex$'d' + ',' + ModeModelName + ',' + ModeRow$'.17g' + ',' + ModeColumn$'.17g' + ',' + deg(ModeAngle)$'.17g' + ',' + ModeScaleRow$'.17g' + ',' + ModeScaleColumn$'.17g' + ',' + ModeScore$'.17g')</l>
+<l>        fnew_line (ModeResultFile)</l>
+<l>    endfor</l>
+<l>    close_file (ModeResultFile)</l>
+<l>endfor</l>
+<c>* Restore original subpixel settings after successful completion.</c>
+<l>for ModeModelIndex := 0 to |ModelIDs|-1 by 1</l>
+<l>    set_generic_shape_model_param (ModelIDs[ModeModelIndex], 'subpixel', OriginalSubpixelModes[ModeModelIndex])</l>
+<l>endfor</l>
+<c>* -------------------  End of the application  -----------------</c>
+<c>* Clean up.</c>
+<l>dev_update_window ('on')</l>
+<l>clear_shape_model (ModelIDRing)</l>
+<l>clear_shape_model (ModelIDNut)</l>
+</body>
+<docu id="main">
+<parameters/>
+</docu>
+</procedure>
+</hdevelop>

@@ -1,0 +1,125 @@
+* Paste this program text into HDevelop 24.11. Not executed in the C++ build.
+* Set BOTH directories. Use a new existing output directory; files are overwritten.
+DataDirectory := '/absolute/path/shape_match_v1/data'
+OutputDirectory := '/absolute/path/new_halcon_alignment_output'
+* 'cropped' matches the C++ PGM+mask inputs. 'full_image' reproduces the original ROIs.
+TrainingMode := 'cropped'
+SubPixel := 'least_squares_very_high'
+get_system ('file_version', Version)
+read_image (SearchImage, DataDirectory + '/original.pgm')
+Names := ['ring','nut']
+ScaleMin := [0.8,0.6]
+ScaleMax := [1.2,1.4]
+AngleStart := [rad(-22.5),rad(-30)]
+AngleEnd := [rad(22.5),rad(60)]
+ModelIDs := []
+open_file (OutputDirectory + '/model_params.csv', 'output', ParamsFile)
+fwrite_string (ParamsFile, 'model,parameter,value')
+fnew_line (ParamsFile)
+open_file (OutputDirectory + '/model_contours.csv', 'output', ContourFile)
+fwrite_string (ContourFile, 'model,contour,point,row,column')
+fnew_line (ContourFile)
+for M := 0 to 1 by 1
+    if (TrainingMode == 'cropped')
+        read_image (TemplateImage, DataDirectory + '/template_' + Names[M] + '.pgm')
+        read_image (MaskImage, DataDirectory + '/template_' + Names[M] + '_mask.pgm')
+        threshold (MaskImage, TemplateDomain, 1, 255)
+        reduce_domain (TemplateImage, TemplateDomain, Template)
+    else
+        if (M == 0)
+            gen_circle (TemplateDomain, 121, 299, 55)
+        else
+            gen_circle (TemplateDomain, 324, 279, 52)
+        endif
+        reduce_domain (SearchImage, TemplateDomain, Template)
+    endif
+    create_generic_shape_model (ModelID)
+    set_generic_shape_model_param (ModelID, 'model_identifier', Names[M])
+    set_generic_shape_model_param (ModelID, 'iso_scale_min', ScaleMin[M])
+    set_generic_shape_model_param (ModelID, 'iso_scale_max', ScaleMax[M])
+    train_generic_shape_model (Template, ModelID)
+    set_generic_shape_model_param (ModelID, 'angle_start', AngleStart[M])
+    set_generic_shape_model_param (ModelID, 'angle_end', AngleEnd[M])
+    set_generic_shape_model_param (ModelID, 'subpixel', SubPixel)
+    set_generic_shape_model_param (ModelID, 'pyramid_level_lowest', 1)
+    set_generic_shape_model_param (ModelID, 'min_score', 0.5)
+    set_generic_shape_model_param (ModelID, 'max_deformation', 0)
+    ModelIDs := [ModelIDs,ModelID]
+    ParameterNames := ['subpixel','metric','contrast_low','contrast_high','min_contrast','min_size','optimization','num_levels','angle_start','angle_end','angle_step','iso_scale_min','iso_scale_max','iso_scale_step','origin_row','origin_column','pyramid_level_lowest','pyramid_level_highest','greediness','min_score','max_deformation']
+    for P := 0 to |ParameterNames| - 1 by 1
+        get_generic_shape_model_param (ModelID, ParameterNames[P], Value)
+        tuple_type (Value, ValueType)
+        if (ValueType == 'string')
+            Text := Value
+        else
+            Text := Value$'.17g'
+        endif
+        fwrite_string (ParamsFile, Names[M] + ',' + ParameterNames[P] + ',' + Text)
+        fnew_line (ParamsFile)
+    endfor
+    area_center (TemplateDomain, Area, DomainRow, DomainColumn)
+    fwrite_string (ParamsFile, Names[M] + ',template_domain_row,' + DomainRow$'.17g')
+    fnew_line (ParamsFile)
+    fwrite_string (ParamsFile, Names[M] + ',template_domain_column,' + DomainColumn$'.17g')
+    fnew_line (ParamsFile)
+    fwrite_string (ParamsFile, Names[M] + ',halcon_file_version,' + Version)
+    fnew_line (ParamsFile)
+    fwrite_string (ParamsFile, Names[M] + ',training_mode,' + TrainingMode)
+    fnew_line (ParamsFile)
+    get_generic_shape_model_object (ModelContours, ModelID, 'contours')
+    count_obj (ModelContours, NumContours)
+    for C := 1 to NumContours by 1
+        select_obj (ModelContours, Contour, C)
+        get_contour_xld (Contour, Rows, Columns)
+        for P := 0 to |Rows| - 1 by 1
+            fwrite_string (ContourFile, Names[M] + ',' + (C-1) + ',' + P + ',' + Rows[P]$'.17g' + ',' + Columns[P]$'.17g')
+            fnew_line (ContourFile)
+        endfor
+    endfor
+endfor
+close_file (ParamsFile)
+close_file (ContourFile)
+* Full image search, no target-location ROIs.
+find_generic_shape_model (SearchImage, ModelIDs, ResultID, NumMatches)
+open_file (OutputDirectory + '/matching_results.csv', 'output', ResultFile)
+fwrite_string (ResultFile, 'index,model,row,column,angle_deg,scale_row,scale_column,score')
+fnew_line (ResultFile)
+open_file (OutputDirectory + '/matching_transforms.csv', 'output', MatrixFile)
+fwrite_string (MatrixFile, 'index,model,m00,m01,m02,m10,m11,m12')
+fnew_line (MatrixFile)
+open_file (OutputDirectory + '/matched_model_contours.csv', 'output', MatchedFile)
+fwrite_string (MatchedFile, 'index,model,contour,point,row,column')
+fnew_line (MatchedFile)
+for I := 0 to NumMatches - 1 by 1
+    get_generic_shape_model_result (ResultID, I, 'model_identifier', Name)
+    get_generic_shape_model_result (ResultID, I, 'row', Row)
+    get_generic_shape_model_result (ResultID, I, 'column', Column)
+    get_generic_shape_model_result (ResultID, I, 'angle', Angle)
+    get_generic_shape_model_result (ResultID, I, 'scale_row', SR)
+    get_generic_shape_model_result (ResultID, I, 'scale_column', SC)
+    get_generic_shape_model_result (ResultID, I, 'score', Score)
+    fwrite_string (ResultFile, I + ',' + Name + ',' + Row$'.17g' + ',' + Column$'.17g' + ',' + deg(Angle)$'.17g' + ',' + SR$'.17g' + ',' + SC$'.17g' + ',' + Score$'.17g')
+    fnew_line (ResultFile)
+    get_generic_shape_model_result (ResultID, I, 'hom_mat_2d', Matrix)
+    Text := I + ',' + Name
+    for J := 0 to 5 by 1
+        Text := Text + ',' + Matrix[J]$'.17g'
+    endfor
+    fwrite_string (MatrixFile, Text)
+    fnew_line (MatrixFile)
+    * These are transformed MODEL contours, not measured scene-edge correspondences.
+    get_generic_shape_model_result_object (MatchedContours, ResultID, I, 'contours')
+    count_obj (MatchedContours, NumContours)
+    for C := 1 to NumContours by 1
+        select_obj (MatchedContours, Contour, C)
+        get_contour_xld (Contour, Rows, Columns)
+        for P := 0 to |Rows| - 1 by 1
+            fwrite_string (MatchedFile, I + ',' + Name + ',' + (C-1) + ',' + P + ',' + Rows[P]$'.17g' + ',' + Columns[P]$'.17g')
+            fnew_line (MatchedFile)
+        endfor
+    endfor
+endfor
+close_file (ResultFile)
+close_file (MatrixFile)
+close_file (MatchedFile)
+clear_shape_model (ModelIDs)
