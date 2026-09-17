@@ -45,7 +45,22 @@ inline double WrapAngle(double a) {
 // Configuration is captured once; diagnostics and scratch allocations use the
 // same worker count as the process-wide executor.
 size_t SearchWorkerCount(size_t work_items);
-void ParallelFor(size_t work_items, const std::function<void(size_t, size_t, size_t)> &function);
+struct WorkerTrace {
+    double start_ms = 0, end_ms = 0, cpu_ms = -1;
+    size_t candidates = 0, evaluations = 0;
+};
+struct TrackingTrace {
+    Clock::time_point submitted;
+    double dispatch_ms = 0, completed_ms = 0;
+    int level = 0;
+    std::vector<WorkerTrace> workers;
+};
+void ParallelFor(size_t work_items, const std::function<void(size_t, size_t, size_t)> &function,
+                 TrackingTrace *trace = nullptr);
+#ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
+// Bounded, submitting-thread-local records; callers drain after matching, never from workers.
+std::vector<TrackingTrace> TakeTrackingTraces();
+#endif
 using Params = std::map<std::string, HValue>;
 double Number(const HValue &value);
 std::string String(const HValue &value);

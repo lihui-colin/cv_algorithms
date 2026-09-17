@@ -168,6 +168,30 @@ int main() {
                 return 1;
             }
         }
+    for (size_t count : {0, 1, 3, 15, 16, 17, 31, 80, 193})
+        for (int iterations : {0, 4, 9}) {
+            std::vector<Candidate> original;
+            for (size_t i = 0; i < count; ++i)
+                original.push_back({poses[i % poses.size()], .123});
+            auto expected = original;
+            shape_match::SearchDiagnostics reference_diag;
+            for (auto &candidate : expected)
+                candidate = ImproveCoordinate(model, features, field, candidate.pose, 0, iterations,
+                                              reference_diag);
+            for (int repeat = 0; repeat < 4; ++repeat) {
+                auto actual = original;
+                shape_match::SearchDiagnostics actual_diag;
+                ImproveCandidatesParallel(model, features, field, actual, 0, iterations, actual_diag);
+                check(actual_diag.evaluated_poses == reference_diag.evaluated_poses);
+                check(actual.size() == expected.size());
+                for (size_t i = 0; i < actual.size(); ++i) {
+                    const auto &a = actual[i], &b = expected[i];
+                    check(a.pose.x == b.pose.x && a.pose.y == b.pose.y &&
+                          a.pose.theta == b.pose.theta && a.pose.scale == b.pose.scale && a.score == b.score);
+                }
+            }
+        }
+    std::cout << "PASS: serial/parallel candidates, order, scores and evaluation counts\n";
     volatile double sink = 0;
     for (int round = 0; round < 3; ++round) {
         for (bool optimized : {false, true}) {

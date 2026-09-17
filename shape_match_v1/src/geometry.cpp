@@ -38,27 +38,40 @@ static Image SmoothSampled(const Image &im, double sigma, int stride) {
         sum += (kernel[i + radius] = std::exp(-0.5 * Sq(i / sigma)));
     for (auto &v : kernel)
         v /= sum;
-    Image tmp = im, out;
+    Image out;
     out.width = (im.width + stride - 1) / stride;
     out.height = (im.height + stride - 1) / stride;
     out.pixels.resize(size_t(out.width) * out.height);
     out.domain.resize(out.pixels.size());
+    // Every temporary value is overwritten. Keep only sampled columns, with no
+    // image/domain copy and no unused columns in the downsampling pass.
+    std::vector<float> horizontal(size_t(out.width) * im.height);
+    const int interior_begin = std::min(out.width, (radius + stride - 1) / stride);
+    const int interior_end = std::max(interior_begin, (im.width - radius + stride - 1) / stride);
     // Domain is metadata: filtering accesses original neighboring pixels; it never pads
     // transparent pixels with black. Edge extraction later checks the valid support.
     ParallelFor(size_t(im.height), [&](size_t begin, size_t end, size_t) {
-        for (int y = int(begin); y < int(end); ++y)
-            for (int x = 0; x < im.width; x += stride) {
-                double v = 0;
-                if (x >= radius && x < im.width - radius) {
-                    const float *row = im.pixels.data() + size_t(y) * im.width + x;
-                    for (int k = -radius; k <= radius; ++k)
-                        v += kernel[k + radius] * row[k];
-                } else {
+        std::vector<double> sums(size_t(out.width));
+        for (int y = int(begin); y < int(end); ++y) {
+            std::fill(sums.begin(), sums.end(), 0.0);
+            const float *row = im.pixels.data() + size_t(y) * im.width;
+            // Vectorize across independent pixels, never reassociate a pixel's
+            // kernel sum. Scalar boundary handling retains clamped sampling.
+            for (int k = -radius; k <= radius; ++k) {
+                const double weight = kernel[k + radius];
+                for (int x = interior_begin; x < interior_end; ++x)
+                    sums[size_t(x)] += weight * row[x * stride + k];
+            }
+            for (int output_x = 0; output_x < out.width; ++output_x) {
+                double v = sums[size_t(output_x)];
+                if (output_x < interior_begin || output_x >= interior_end) {
+                    const int x = output_x * stride;
                     for (int k = -radius; k <= radius; ++k)
                         v += kernel[k + radius] * im(y, std::clamp(x + k, 0, im.width - 1));
                 }
-                tmp.pixels[size_t(y) * im.width + x] = float(v);
+                horizontal[size_t(y) * out.width + output_x] = float(v);
             }
+        }
     });
     ParallelFor(size_t(out.height), [&](size_t begin, size_t end, size_t) {
         // Accumulate contiguous rows; preserve each pixel's kernel order and
@@ -68,11 +81,11 @@ static Image SmoothSampled(const Image &im, double sigma, int stride) {
             const int y = output_y * stride;
             std::fill(sums.begin(), sums.end(), 0.0);
             for (int k = -radius; k <= radius; ++k) {
-                const float *row = tmp.pixels.data() +
-                    size_t(std::clamp(y + k, 0, im.height - 1)) * im.width;
+                const float *row = horizontal.data() +
+                    size_t(std::clamp(y + k, 0, im.height - 1)) * out.width;
                 const double weight = kernel[k + radius];
                 for (int x = 0; x < out.width; ++x)
-                    sums[size_t(x)] += weight * row[x * stride];
+                    sums[size_t(x)] += weight * row[x];
             }
             for (int x = 0; x < out.width; ++x) {
                 const size_t index = size_t(output_y) * out.width + x;

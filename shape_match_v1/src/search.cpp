@@ -375,11 +375,23 @@ static Candidate ImproveCoordinate(const ModelSnapshot &m, const Features &featu
     }
     return {pose, best};
 }
+#ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
+static thread_local std::vector<TrackingTrace> tracking_traces;
+std::vector<TrackingTrace> TakeTrackingTraces() {
+    auto result = std::move(tracking_traces);
+    tracking_traces.clear();
+    return result;
+}
+#endif
 static void ImproveCandidatesParallel(const ModelSnapshot &m, const Features &features,
                                       const EdgeField &field, std::vector<Candidate> &candidates,
                                       int level, int iterations, SearchDiagnostics &diag) {
     const size_t workers = SearchWorkerCount(candidates.size());
     std::vector<size_t> evaluations(workers);
+#ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
+    TrackingTrace trace;
+    trace.level = level;
+#endif
     ParallelFor(candidates.size(), [&](size_t begin, size_t end, size_t worker) {
         SearchDiagnostics local;
         TranslationScoreCache workspace(features);
@@ -387,9 +399,23 @@ static void ImproveCandidatesParallel(const ModelSnapshot &m, const Features &fe
             auto &candidate = candidates[index];
             candidate =
                 ImproveCoordinate(m, features, field, candidate.pose, level, iterations, local, &workspace);
+#ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
+            ++trace.workers[worker].candidates;
+#endif
         }
         evaluations[worker] = local.evaluated_poses;
-    });
+#ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
+        trace.workers[worker].evaluations = local.evaluated_poses;
+#endif
+    }
+#ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
+    , &trace
+#endif
+    );
+#ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
+    if (tracking_traces.size() < 512)
+        tracking_traces.push_back(std::move(trace));
+#endif
     diag.evaluated_poses += std::accumulate(evaluations.begin(), evaluations.end(), size_t(0));
 }
 

@@ -15,21 +15,32 @@ static void Check(bool ok, const char *message) {
 static void CheckCoverage(size_t count) {
     std::vector<int> visits(count);
     std::vector<size_t> sizes(SearchWorkerCount(count));
+    TrackingTrace trace;
     ParallelFor(count, [&](size_t begin, size_t end, size_t worker) {
         Check(begin <= end && end <= count && worker < sizes.size(), "Invalid worker range");
         sizes[worker] = end - begin;
         for (size_t i = begin; i < end; ++i)
             ++visits[i];
-    });
+    }, &trace);
     Check(std::all_of(visits.begin(), visits.end(), [](int n) { return n == 1; }),
           "Work must be visited exactly once");
     Check(std::accumulate(sizes.begin(), sizes.end(), size_t(0)) == count, "Missing work");
+#ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
+    if (count)
+        for (const auto &w : trace.workers) {
+            Check(w.start_ms >= trace.dispatch_ms && w.end_ms >= w.start_ms &&
+                  trace.completed_ms >= w.end_ms, "Invalid trace timestamps");
+#ifdef __linux__
+            Check(w.cpu_ms >= 0, "Missing thread CPU timing");
+#endif
+        }
+#endif
 }
 
 static void CheckFilters() {
-    for (int width : {1, 2, 5, 17, 64})
-        for (int height : {1, 3, 18})
-            for (double sigma : {.5, .8, 1., 1.4}) {
+    for (int width : {1, 2, 3, 5, 6, 7, 8, 17, 64, 127})
+        for (int height : {1, 3, 18, 35})
+            for (double sigma : {.5, .8, 1., 1.4, 3.}) {
                 shape_match::Image im;
                 im.width = width; im.height = height;
                 for (int i = 0; i < width * height; ++i) {
