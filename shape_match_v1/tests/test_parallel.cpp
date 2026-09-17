@@ -116,15 +116,24 @@ int main() {
         // Exercise exceptions on both the submitting thread and a pool worker.
         for (size_t failing = 0; failing < std::min<size_t>(2, SearchWorkerCount(257)); ++failing) {
             bool caught = false;
+            TrackingTrace failure_trace;
             try {
                 ParallelFor(257, [=](size_t, size_t, size_t worker) {
                     if (worker == failing)
                         throw std::runtime_error("worker failure");
-                });
+                }, &failure_trace);
             } catch (const std::runtime_error &error) {
                 caught = std::string(error.what()) == "worker failure";
             }
             Check(caught, "Worker exception must reach caller");
+#ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
+            const auto &record = failure_trace.workers[failing];
+            Check(record.end_ms >= record.start_ms && failure_trace.completed_ms >= record.end_ms,
+                  "Exception path lost worker timing");
+#ifdef __linux__
+            Check(record.cpu_ms >= 0, "Exception path lost CPU timing");
+#endif
+#endif
             CheckCoverage(257);
         }
 

@@ -22,6 +22,30 @@ double ThreadCpuMs() {
 #endif
     return -1;
 }
+// One scope timer for both serial and pooled tasks, including exception paths.
+class WorkerTimer {
+  public:
+    WorkerTimer(TrackingTrace *trace, size_t worker) : trace_(trace), worker_(worker) {
+        if (trace_) {
+            trace_->workers[worker_].start_ms = Elapsed(trace_->submitted);
+            cpu_start_ = ThreadCpuMs();
+        }
+    }
+    ~WorkerTimer() {
+        if (trace_) {
+            const double cpu_end = ThreadCpuMs();
+            auto &record = trace_->workers[worker_];
+            record.end_ms = Elapsed(trace_->submitted);
+            record.cpu_ms = cpu_start_ >= 0 && cpu_end >= 0 ? cpu_end - cpu_start_ : -1;
+            if (trace_->workers.size() == 1)
+                trace_->completed_ms = record.end_ms;
+        }
+    }
+  private:
+    TrackingTrace *trace_;
+    size_t worker_;
+    double cpu_start_ = -1;
+};
 #endif
 
 size_t ConfiguredWorkers() {
@@ -93,9 +117,7 @@ class Executor {
     void Invoke(size_t worker) noexcept {
         executing = true;
 #ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
-        if (trace_)
-            trace_->workers[worker].start_ms = Elapsed(trace_->submitted);
-        const double cpu_start = trace_ ? ThreadCpuMs() : -1;
+        WorkerTimer timer(trace_, worker);
 #endif
         try {
             task_(count_ * worker / active_, count_ * (worker + 1) / active_, worker);
@@ -105,14 +127,6 @@ class Executor {
                 error_ = std::current_exception();
         }
         executing = false;
-#ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
-        if (trace_) {
-            auto &record = trace_->workers[worker];
-            const double cpu_end = ThreadCpuMs();
-            record.end_ms = Elapsed(trace_->submitted);
-            record.cpu_ms = cpu_start >= 0 && cpu_end >= 0 ? cpu_end - cpu_start : -1;
-        }
-#endif
     }
 
     void Worker(size_t worker) {
@@ -171,19 +185,9 @@ void ParallelFor(size_t work_items, const RangeTask &function, TrackingTrace *tr
         return;
     if (executing || SearchWorkerCount(work_items) == 1) {
 #ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
-        if (trace)
-            trace->workers[0].start_ms = Elapsed(trace->submitted);
-        const double cpu_start = trace ? ThreadCpuMs() : -1;
+        WorkerTimer timer(trace, 0);
 #endif
         function(0, work_items, 0);
-#ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
-        if (trace) {
-            auto &record = trace->workers[0];
-            const double cpu_end = ThreadCpuMs();
-            record.end_ms = trace->completed_ms = Elapsed(trace->submitted);
-            record.cpu_ms = cpu_start >= 0 && cpu_end >= 0 ? cpu_end - cpu_start : -1;
-        }
-#endif
         return;
     }
     static Executor executor;

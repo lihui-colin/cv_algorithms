@@ -68,19 +68,25 @@ static double ScorePoints(size_t count, const EdgeField &im, const std::string &
     return count ? std::clamp(std::max(positive, negative) / count, 0.0, 1.0) : 0;
 }
 
+static ScoringPoint TransformFeature(const EdgeFeature &f, double c, double s, double scale) {
+    return {scale * (c * f.p.x - s * f.p.y), scale * (s * f.p.x + c * f.p.y),
+            c * f.n.x - s * f.n.y, s * f.n.x + c * f.n.y, 0, 0};
+}
+static ScoringPoint TranslateForScoring(ScoringPoint point, const EdgeField &field,
+                                        double x, double y) {
+    point.x = x + point.x;
+    point.y = y + point.y;
+    point.pixel_x = ScorePixel(point.x, field.width);
+    point.pixel_y = ScorePixel(point.y, field.height);
+    return point;
+}
+
 double EvaluatePose(const Features &features, const EdgeField &im, const Pose &pose,
                     const std::string &metric, double sigma, double min_score) {
     const double c = std::cos(pose.theta), s = std::sin(pose.theta);
     return ScorePoints(features.size(), im, metric, sigma, min_score, [&](size_t index) {
-        const auto &feature = features[index];
-        const double x = pose.x + pose.scale * (c * feature.p.x - s * feature.p.y);
-        const double y = pose.y + pose.scale * (s * feature.p.x + c * feature.p.y);
-        return ScoringPoint{x,
-                            y,
-                            c * feature.n.x - s * feature.n.y,
-                            s * feature.n.x + c * feature.n.y,
-                            ScorePixel(x, im.width),
-                            ScorePixel(y, im.height)};
+        return TranslateForScoring(TransformFeature(features[index], c, s, pose.scale),
+                                   im, pose.x, pose.y);
     });
 }
 
@@ -93,20 +99,14 @@ class TranslationScoreCache {
         if (!valid_ || theta_ != pose.theta || scale_ != pose.scale) {
             const double c = std::cos(pose.theta), s = std::sin(pose.theta);
             points_.resize(features_.size());
-            for (size_t i = 0; i < features_.size(); ++i) {
-                const auto &f = features_[i];
-                points_[i] = {pose.scale * (c * f.p.x - s * f.p.y),
-                              pose.scale * (s * f.p.x + c * f.p.y),
-                              c * f.n.x - s * f.n.y, s * f.n.x + c * f.n.y, 0, 0};
-            }
+            for (size_t i = 0; i < features_.size(); ++i)
+                points_[i] = TransformFeature(features_[i], c, s, pose.scale);
             theta_ = pose.theta;
             scale_ = pose.scale;
             valid_ = true;
         }
         return ScorePoints(points_.size(), field, metric, sigma, 0, [&](size_t i) {
-            const auto &p = points_[i];
-            const double x = pose.x + p.x, y = pose.y + p.y;
-            return ScoringPoint{x, y, p.nx, p.ny, ScorePixel(x, field.width), ScorePixel(y, field.height)};
+            return TranslateForScoring(points_[i], field, pose.x, pose.y);
         });
     }
   private:
@@ -122,10 +122,10 @@ static std::vector<ScoringPoint> PrepareCoarsePoints(const Features &features, d
     std::vector<ScoringPoint> out;
     out.reserve(features.size());
     for (const auto &feature : features) {
-        const double x = scale * (c * feature.p.x - s * feature.p.y);
-        const double y = scale * (s * feature.p.x + c * feature.p.y);
-        out.push_back({x, y, c * feature.n.x - s * feature.n.y, s * feature.n.x + c * feature.n.y,
-                       int(std::lround(x)), int(std::lround(y))});
+        auto point = TransformFeature(feature, c, s, scale);
+        point.pixel_x = int(std::lround(point.x));
+        point.pixel_y = int(std::lround(point.y));
+        out.push_back(point);
     }
     return out;
 }
@@ -388,9 +388,11 @@ static void ImproveCandidatesParallel(const ModelSnapshot &m, const Features &fe
                                       int level, int iterations, SearchDiagnostics &diag) {
     const size_t workers = SearchWorkerCount(candidates.size());
     std::vector<size_t> evaluations(workers);
+    TrackingTrace *trace_ptr = nullptr;
 #ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
     TrackingTrace trace;
     trace.level = level;
+    trace_ptr = &trace;
 #endif
     ParallelFor(candidates.size(), [&](size_t begin, size_t end, size_t worker) {
         SearchDiagnostics local;
@@ -399,19 +401,13 @@ static void ImproveCandidatesParallel(const ModelSnapshot &m, const Features &fe
             auto &candidate = candidates[index];
             candidate =
                 ImproveCoordinate(m, features, field, candidate.pose, level, iterations, local, &workspace);
-#ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
-            ++trace.workers[worker].candidates;
-#endif
         }
         evaluations[worker] = local.evaluated_poses;
 #ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
+        trace.workers[worker].candidates = end - begin;
         trace.workers[worker].evaluations = local.evaluated_poses;
 #endif
-    }
-#ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
-    , &trace
-#endif
-    );
+    }, trace_ptr);
 #ifdef SHAPE_MATCH_TRACKING_DIAGNOSTICS
     if (tracking_traces.size() < 512)
         tracking_traces.push_back(std::move(trace));
