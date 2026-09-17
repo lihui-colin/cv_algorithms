@@ -30,6 +30,15 @@ inline void Output(const void *p) {
 inline double Sq(double x) {
     return x * x;
 }
+// Same valid-pixel result as lround, including negative half ties, without
+// a libm call. Test the fractional part instead of x+0.5: the latter rounds
+// nextafter(0.5,0) up incorrectly. Invalid coordinates never reach an int cast.
+inline int ScorePixel(double x, int extent) {
+    if (!(x > -0.5 && x < double(extent) - 0.5))
+        return -1;
+    const int integral = int(x);
+    return integral + int(x - integral >= 0.5);
+}
 inline double WrapAngle(double a) {
     return std::remainder(a, 2 * pi);
 }
@@ -109,6 +118,15 @@ double RefinementSupportLoss(const std::vector<Correspondence> &pairs, const Pos
 struct ModelLevel {
     Features features;
     double factor = 1;
+    Features coarse_features;
+};
+struct CoarseModelCache;
+struct CoarseCacheSlot {
+    std::mutex mutex;
+    std::shared_ptr<const CoarseModelCache> value;
+    CoarseCacheSlot() = default;
+    // Diagnostic tools clone and modify models: never copy their derived cache.
+    CoarseCacheSlot(const CoarseCacheSlot &) {}
 };
 struct TrainedData {
     Image image;
@@ -120,6 +138,8 @@ struct TrainedData {
     std::array<Vec, 4> rectangle{}; // min-area rectangle, relative to training origin
     double radius = 1;
     Params effective;
+    // Derived model-only data. Immutable entries remain alive for concurrent snapshots.
+    mutable CoarseCacheSlot coarse_cache;
 };
 struct ShapeModel : HandleBase {
     ShapeModel(uint64_t value)

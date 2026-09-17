@@ -35,13 +35,24 @@ int main(int argc, char **argv) {
                                   {-30 * rad, 60 * rad, "least_squares_very_high"});
         const HTuple models{ring, nut};
         const auto image = ReadPgm("data/original.pgm");
-        FindGenericShapeModel(image, models, &result, &count); // warm-up
+        constexpr int warmup = 20;
+        for (int i = 0; i < warmup; ++i)
+            FindGenericShapeModel(image, models, &result, &count);
         std::vector<double> elapsed;
+        std::vector<SearchDiagnostics> stages;
+        std::vector<std::string> resources;
         for (int i = 0; i < iterations; ++i) {
             FindGenericShapeModel(image, models, &result, &count);
             if (count.I() != 7)
                 throw std::runtime_error("Detection changed during performance run");
             elapsed.push_back(GetSearchDiagnostics(result).total_ms);
+            stages.push_back(GetSearchDiagnostics(result));
+            std::ifstream status("/proc/self/status");
+            std::string line, resource;
+            while (std::getline(status, line))
+                if (line.find("VmRSS:") == 0 || line.find("Threads:") == 0)
+                    resource += line + " ";
+            resources.push_back(resource);
         }
         auto ordered = elapsed;
         std::sort(ordered.begin(), ordered.end());
@@ -54,7 +65,7 @@ int main(int argc, char **argv) {
         if (!out)
             throw std::runtime_error("Cannot write benchmark JSON");
         out << std::setprecision(12) << "{\"iterations\":" << iterations
-            << ",\"warmup\":1,\"threads\":" << GetSearchThreadCount() << ",\"median_ms\":" << median
+            << ",\"warmup\":" << warmup << ",\"threads\":" << GetSearchThreadCount() << ",\"median_ms\":" << median
             << ",\"p95_ms\":" << p95 << ",\"min_ms\":" << ordered.front()
             << ",\"max_ms\":" << ordered.back() << ",\"samples_ms\":[";
         for (size_t i = 0; i < elapsed.size(); ++i) {
@@ -63,6 +74,17 @@ int main(int argc, char **argv) {
             out << elapsed[i];
         }
         out << "]}\n";
+        std::ofstream detail(output + ".csv");
+        detail << "iteration,total_ms,pyramid_ms,coarse_ms,tracking_ms,refinement_ms,evaluated_poses,resources\n"
+               << std::setprecision(12);
+        for (size_t i = 0; i < stages.size(); ++i) {
+            const auto &d = stages[i];
+            detail << i << ',' << d.total_ms << ',' << d.pyramid_ms << ',' << d.top_level_ms << ','
+                   << d.tracking_ms << ',' << d.refinement_ms << ',' << d.evaluated_poses << ','
+                   << resources[i] << '\n';
+        }
+        if (!detail || !out)
+            throw std::runtime_error("Cannot write benchmark results");
         ClearShapeModel(models);
         std::cout << "median_ms=" << median << " p95_ms=" << p95
                   << " threads=" << GetSearchThreadCount() << " instances=7 runs=" << iterations

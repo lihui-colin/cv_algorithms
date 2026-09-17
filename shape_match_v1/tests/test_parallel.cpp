@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <future>
 #include <iostream>
+#include <limits>
 #include <thread>
 
 using namespace shape_match::detail;
@@ -25,8 +26,78 @@ static void CheckCoverage(size_t count) {
     Check(std::accumulate(sizes.begin(), sizes.end(), size_t(0)) == count, "Missing work");
 }
 
+static void CheckFilters() {
+    for (int width : {1, 2, 5, 17, 64})
+        for (int height : {1, 3, 18})
+            for (double sigma : {.5, .8, 1., 1.4}) {
+                shape_match::Image im;
+                im.width = width; im.height = height;
+                for (int i = 0; i < width * height; ++i) {
+                    im.pixels.push_back(float((i * 73 + 19) % 256));
+                    im.domain.push_back(i % 5 != 0);
+                }
+                const int radius = std::max(1, int(std::ceil(3 * sigma)));
+                std::vector<double> kernel(size_t(2 * radius + 1));
+                double sum = 0;
+                for (int k = -radius; k <= radius; ++k)
+                    sum += (kernel[k + radius] = std::exp(-.5 * Sq(k / sigma)));
+                for (auto &v : kernel) v /= sum;
+                auto tmp = im, expected = im;
+                for (int y = 0; y < height; ++y)
+                    for (int x = 0; x < width; ++x) {
+                        double v = 0;
+                        for (int k = -radius; k <= radius; ++k)
+                            v += kernel[k + radius] * im(y, std::clamp(x+k, 0, width-1));
+                        tmp.pixels[size_t(y)*width+x] = float(v);
+                    }
+                for (int y = 0; y < height; ++y)
+                    for (int x = 0; x < width; ++x) {
+                        double v = 0;
+                        for (int k = -radius; k <= radius; ++k)
+                            v += kernel[k + radius] * tmp(std::clamp(y+k, 0, height-1), x);
+                        expected.pixels[size_t(y)*width+x] = float(v);
+                    }
+                const auto actual = Smooth(im, sigma);
+                Check(actual.pixels == expected.pixels && actual.domain == im.domain,
+                      "Optimized smoothing differs from scalar reference");
+                if (sigma == 1.) {
+                    const auto down = Downsample(im);
+                    for (int y = 0; y < down.height; ++y)
+                        for (int x = 0; x < down.width; ++x)
+                            Check(down(y,x) == expected(2*y,2*x) &&
+                                  down.domain[size_t(y)*down.width+x] == im.domain[size_t(2*y)*width+2*x],
+                                  "Fused downsampling differs from filter then decimate");
+                }
+            }
+}
+
+static void CheckScorePixels() {
+    for (int extent : {1, 2, 17, 640, 4096}) {
+        auto check = [&](double x) {
+            const long rounded = std::lround(x);
+            const int expected = rounded >= 0 && rounded < extent ? int(rounded) : -1;
+            Check(ScorePixel(x, extent) == expected, "Score pixel differs from lround");
+        };
+        for (int i = -2; i <= extent + 2; ++i) {
+            check(double(i));
+            const double tie = i + .5;
+            check(tie);
+            check(std::nextafter(tie, -std::numeric_limits<double>::infinity()));
+            check(std::nextafter(tie, std::numeric_limits<double>::infinity()));
+        }
+        for (int i = -10000; i < 10000; ++i)
+            check(i * .071239);
+        Check(ScorePixel(std::numeric_limits<double>::infinity(), extent) == -1,
+              "Infinite pixel coordinate accepted");
+        Check(ScorePixel(std::numeric_limits<double>::quiet_NaN(), extent) == -1,
+              "NaN pixel coordinate accepted");
+    }
+}
+
 int main() {
     try {
+        CheckFilters();
+        CheckScorePixels();
         ParallelFor(0, [](size_t, size_t, size_t) { throw std::runtime_error("Empty loop ran"); });
         for (size_t count : {1, 2, 3, 7, 33, 257})
             CheckCoverage(count);

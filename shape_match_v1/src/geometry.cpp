@@ -30,7 +30,7 @@ float CubicSample(const Image &im, double x, double y) {
     }
     return float(Cubic(row[0], row[1], row[2], row[3], y - iy));
 }
-Image Smooth(const Image &im, double sigma) {
+static Image SmoothSampled(const Image &im, double sigma, int stride) {
     int radius = std::max(1, int(std::ceil(3 * sigma)));
     std::vector<double> kernel(2 * radius + 1);
     double sum = 0;
@@ -38,46 +38,58 @@ Image Smooth(const Image &im, double sigma) {
         sum += (kernel[i + radius] = std::exp(-0.5 * Sq(i / sigma)));
     for (auto &v : kernel)
         v /= sum;
-    Image tmp = im, out = im;
+    Image tmp = im, out;
+    out.width = (im.width + stride - 1) / stride;
+    out.height = (im.height + stride - 1) / stride;
+    out.pixels.resize(size_t(out.width) * out.height);
+    out.domain.resize(out.pixels.size());
     // Domain is metadata: filtering accesses original neighboring pixels; it never pads
     // transparent pixels with black. Edge extraction later checks the valid support.
     ParallelFor(size_t(im.height), [&](size_t begin, size_t end, size_t) {
         for (int y = int(begin); y < int(end); ++y)
-            for (int x = 0; x < im.width; ++x) {
+            for (int x = 0; x < im.width; x += stride) {
                 double v = 0;
-                for (int k = -radius; k <= radius; ++k)
-                    v += kernel[k + radius] * im(y, std::clamp(x + k, 0, im.width - 1));
+                if (x >= radius && x < im.width - radius) {
+                    const float *row = im.pixels.data() + size_t(y) * im.width + x;
+                    for (int k = -radius; k <= radius; ++k)
+                        v += kernel[k + radius] * row[k];
+                } else {
+                    for (int k = -radius; k <= radius; ++k)
+                        v += kernel[k + radius] * im(y, std::clamp(x + k, 0, im.width - 1));
+                }
                 tmp.pixels[size_t(y) * im.width + x] = float(v);
             }
     });
-    ParallelFor(size_t(im.height), [&](size_t begin, size_t end, size_t) {
-        for (int y = int(begin); y < int(end); ++y)
-            for (int x = 0; x < im.width; ++x) {
-                double v = 0;
-                for (int k = -radius; k <= radius; ++k)
-                    v += kernel[k + radius] * tmp(std::clamp(y + k, 0, im.height - 1), x);
-                out.pixels[size_t(y) * im.width + x] = float(v);
+    ParallelFor(size_t(out.height), [&](size_t begin, size_t end, size_t) {
+        // Accumulate contiguous rows; preserve each pixel's kernel order and
+        // double precision while allowing vectorization across independent x.
+        std::vector<double> sums(size_t(out.width));
+        for (int output_y = int(begin); output_y < int(end); ++output_y) {
+            const int y = output_y * stride;
+            std::fill(sums.begin(), sums.end(), 0.0);
+            for (int k = -radius; k <= radius; ++k) {
+                const float *row = tmp.pixels.data() +
+                    size_t(std::clamp(y + k, 0, im.height - 1)) * im.width;
+                const double weight = kernel[k + radius];
+                for (int x = 0; x < out.width; ++x)
+                    sums[size_t(x)] += weight * row[x * stride];
             }
+            for (int x = 0; x < out.width; ++x) {
+                const size_t index = size_t(output_y) * out.width + x;
+                out.pixels[index] = float(sums[size_t(x)]);
+                out.domain[index] = im.domain[size_t(y) * im.width + x * stride];
+            }
+        }
     });
     return out;
 }
+Image Smooth(const Image &im, double sigma) {
+    return SmoothSampled(im, sigma, 1);
+}
 Image Downsample(const Image &im) {
-    auto filtered = Smooth(im, 1.0);
-    Image out;
-    out.width = (im.width + 1) / 2;
-    out.height = (im.height + 1) / 2;
-    out.pixels.resize(size_t(out.width) * out.height);
-    out.domain.resize(out.pixels.size());
     // Explicit sampling map: level point (x,y) corresponds to previous (2*x,2*y).
-    ParallelFor(size_t(out.height), [&](size_t begin, size_t end, size_t) {
-        for (int y = int(begin); y < int(end); ++y)
-            for (int x = 0; x < out.width; ++x) {
-                size_t k = size_t(y) * out.width + x, old = size_t(2 * y) * im.width + 2 * x;
-                out.pixels[k] = filtered.pixels[old];
-                out.domain[k] = im.domain[old];
-            }
-    });
-    return out;
+    // Compute only retained columns/rows, without changing filter arithmetic.
+    return SmoothSampled(im, 1.0, 2);
 }
 GradientField ComputeGradients(const Image &im) {
     GradientField out;

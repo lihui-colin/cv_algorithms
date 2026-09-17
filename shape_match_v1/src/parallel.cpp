@@ -16,7 +16,9 @@ size_t ConfiguredWorkers() {
         const unsigned available = std::max(1u, std::thread::hardware_concurrency());
         const char *value = std::getenv("SHAPE_MATCH_NUM_THREADS");
         if (!value)
-            return size_t(std::min(32u, available));
+            // Small-image stages submit many short jobs. A conservative default
+            // avoids oversubscription; larger workloads can opt in explicitly.
+            return size_t(std::min(4u, available));
         const std::string_view text(value);
         unsigned requested = 0;
         const auto parsed = std::from_chars(text.data(), text.data() + text.size(), requested);

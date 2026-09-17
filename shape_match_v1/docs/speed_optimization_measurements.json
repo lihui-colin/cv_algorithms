@@ -1,0 +1,347 @@
+{
+  "target_p95_ms": 20,
+  "performance_passed": false,
+  "cpu": "Intel Xeon Platinum 8368Q",
+  "image": "640x480; two templates; 7 instances",
+  "precision": {
+    "expected": 7,
+    "detected": 7,
+    "associated": 7,
+    "extra": 0,
+    "bundled_label_correction": false,
+    "position_rmse_px": 0.07799325530816274,
+    "position_max_px": 0.14753942134748751,
+    "position_p95_px": 0.14753942134748751,
+    "comparisons": [
+      {
+        "reference_index": 0,
+        "model": "nut",
+        "matched": true,
+        "prediction_index": 1,
+        "position_error_px": 6.255160141482515e-07,
+        "row_error_px": 6.107006242928037e-07,
+        "column_error_px": -1.3533303899748717e-07,
+        "angle_error_raw_deg": 1.160667188543751e-06,
+        "angle_error_mod_symmetry_deg": 1.160667188543751e-06,
+        "scale_row_relative_error": -1.7153315767792776e-08,
+        "scale_column_relative_error": -1.7153315767792776e-08
+      },
+      {
+        "reference_index": 1,
+        "model": "ring",
+        "matched": true,
+        "prediction_index": 0,
+        "position_error_px": 1.8962645304208776e-06,
+        "row_error_px": 7.890149902323174e-07,
+        "column_error_px": 1.7243185652660031e-06,
+        "angle_error_raw_deg": 2.102848877529798e-07,
+        "angle_error_mod_symmetry_deg": 2.102848877529798e-07,
+        "scale_row_relative_error": -7.402268686895752e-09,
+        "scale_column_relative_error": -7.402268686895752e-09
+      },
+      {
+        "reference_index": 2,
+        "model": "ring",
+        "matched": true,
+        "prediction_index": 2,
+        "position_error_px": 0.091439605592973,
+        "row_error_px": 0.09143848510174735,
+        "column_error_px": 0.0004526734982164271,
+        "angle_error_raw_deg": -0.1754313065524329,
+        "angle_error_mod_symmetry_deg": -0.1754313065524329,
+        "scale_row_relative_error": 0.006829556014736893,
+        "scale_column_relative_error": 0.006829556014736893
+      },
+      {
+        "reference_index": 3,
+        "model": "nut",
+        "matched": true,
+        "prediction_index": 4,
+        "position_error_px": 0.14753942134748751,
+        "row_error_px": 0.13858010532476328,
+        "column_error_px": 0.050630378822688726,
+        "angle_error_raw_deg": -0.07992737957058438,
+        "angle_error_mod_symmetry_deg": -0.07992737957058438,
+        "scale_row_relative_error": -0.0013296649379013203,
+        "scale_column_relative_error": -0.0013296649379013203
+      },
+      {
+        "reference_index": 4,
+        "model": "nut",
+        "matched": true,
+        "prediction_index": 3,
+        "position_error_px": 0.06304528107306787,
+        "row_error_px": 0.02703425994519648,
+        "column_error_px": 0.056954861555425396,
+        "angle_error_raw_deg": -0.045174717998534675,
+        "angle_error_mod_symmetry_deg": -0.045174717998534675,
+        "scale_row_relative_error": 0.00045309059651033046,
+        "scale_column_relative_error": 0.00045309059651033046
+      },
+      {
+        "reference_index": 5,
+        "model": "ring",
+        "matched": true,
+        "prediction_index": 6,
+        "position_error_px": 0.07022551867587157,
+        "row_error_px": -0.025055807403305153,
+        "column_error_px": 0.06560358213286577,
+        "angle_error_raw_deg": -0.0460444828396156,
+        "angle_error_mod_symmetry_deg": -0.0460444828396156,
+        "scale_row_relative_error": -0.0005781718246061773,
+        "scale_column_relative_error": -0.0005781718246061773
+      },
+      {
+        "reference_index": 6,
+        "model": "nut",
+        "matched": true,
+        "prediction_index": 5,
+        "position_error_px": 0.05954176558967223,
+        "row_error_px": -0.013416013495316292,
+        "column_error_px": -0.05801062343596186,
+        "angle_error_raw_deg": -0.010824776192835728,
+        "angle_error_mod_symmetry_deg": -0.010824776192835728,
+        "scale_row_relative_error": 0.00012000006377221872,
+        "scale_column_relative_error": 0.00012000006377221872
+      }
+    ],
+    "association_passed": true,
+    "precision_passed": true,
+    "limits": {
+      "rmse_px": 0.078,
+      "max_px": 0.148
+    }
+  },
+  "runs": {
+    "speed-before": {
+      "iterations": 100,
+      "warmup": 20,
+      "threads": 8,
+      "median_ms": 62.4987885,
+      "p95_ms": 67.079878,
+      "min_ms": 22.145862,
+      "max_ms": 79.676334,
+      "stage_medians_ms": {
+        "pyramid_ms": 28.2300145,
+        "coarse_ms": 10.621755499999999,
+        "tracking_ms": 15.6477515,
+        "refinement_ms": 7.597843
+      },
+      "resources_first_last": [
+        "VmRSS:\t    6680 kB Threads:\t8 ",
+        "VmRSS:\t    7480 kB Threads:\t8 "
+      ],
+      "evaluated_poses_range": [
+        137143,
+        137143
+      ]
+    },
+    "speed-threads-1": {
+      "iterations": 40,
+      "warmup": 20,
+      "threads": 1,
+      "median_ms": 73.9937075,
+      "p95_ms": 78.23352,
+      "min_ms": 73.014719,
+      "max_ms": 106.380048,
+      "stage_medians_ms": {
+        "pyramid_ms": 24.618631,
+        "coarse_ms": 16.9644795,
+        "tracking_ms": 27.7484065,
+        "refinement_ms": 4.565621500000001
+      },
+      "resources_first_last": [
+        "VmRSS:\t   18380 kB Threads:\t1 ",
+        "VmRSS:\t   18592 kB Threads:\t1 "
+      ],
+      "evaluated_poses_range": [
+        137143,
+        137143
+      ]
+    },
+    "speed-threads-2": {
+      "iterations": 40,
+      "warmup": 20,
+      "threads": 2,
+      "median_ms": 42.223975,
+      "p95_ms": 44.044248,
+      "min_ms": 40.310709,
+      "max_ms": 52.125903,
+      "stage_medians_ms": {
+        "pyramid_ms": 15.6330975,
+        "coarse_ms": 8.8857385,
+        "tracking_ms": 14.065939499999999,
+        "refinement_ms": 3.550002
+      },
+      "resources_first_last": [
+        "VmRSS:\t    6816 kB Threads:\t2 ",
+        "VmRSS:\t   11508 kB Threads:\t2 "
+      ],
+      "evaluated_poses_range": [
+        137143,
+        137143
+      ]
+    },
+    "speed-threads-4": {
+      "iterations": 40,
+      "warmup": 20,
+      "threads": 4,
+      "median_ms": 22.992803,
+      "p95_ms": 24.794673,
+      "min_ms": 22.584123,
+      "max_ms": 30.307647,
+      "stage_medians_ms": {
+        "pyramid_ms": 8.5848815,
+        "coarse_ms": 4.8148325,
+        "tracking_ms": 7.30897,
+        "refinement_ms": 2.138824
+      },
+      "resources_first_last": [
+        "VmRSS:\t   16480 kB Threads:\t4 ",
+        "VmRSS:\t   16944 kB Threads:\t4 "
+      ],
+      "evaluated_poses_range": [
+        137143,
+        137143
+      ]
+    },
+    "speed-threads-8": {
+      "iterations": 40,
+      "warmup": 20,
+      "threads": 8,
+      "median_ms": 61.9157245,
+      "p95_ms": 73.274473,
+      "min_ms": 43.00895,
+      "max_ms": 84.019603,
+      "stage_medians_ms": {
+        "pyramid_ms": 27.6260435,
+        "coarse_ms": 10.6041455,
+        "tracking_ms": 15.538153000000001,
+        "refinement_ms": 7.560404
+      },
+      "resources_first_last": [
+        "VmRSS:\t    6764 kB Threads:\t8 ",
+        "VmRSS:\t    7424 kB Threads:\t8 "
+      ],
+      "evaluated_poses_range": [
+        137143,
+        137143
+      ]
+    },
+    "speed-threads-16": {
+      "iterations": 40,
+      "warmup": 20,
+      "threads": 16,
+      "median_ms": 45.8004625,
+      "p95_ms": 57.283608,
+      "min_ms": 35.259311,
+      "max_ms": 59.781883,
+      "stage_medians_ms": {
+        "pyramid_ms": 22.7641105,
+        "coarse_ms": 6.5410875,
+        "tracking_ms": 8.8480805,
+        "refinement_ms": 7.59058
+      },
+      "resources_first_last": [
+        "VmRSS:\t    6852 kB Threads:\t16 ",
+        "VmRSS:\t    7476 kB Threads:\t16 "
+      ],
+      "evaluated_poses_range": [
+        137143,
+        137143
+      ]
+    },
+    "speed-before-final-500": {
+      "iterations": 500,
+      "warmup": 20,
+      "threads": 4,
+      "median_ms": 29.130493,
+      "p95_ms": 39.333957,
+      "min_ms": 23.782486,
+      "max_ms": 73.906189,
+      "stage_medians_ms": {
+        "pyramid_ms": 11.04047,
+        "coarse_ms": 5.728161999999999,
+        "tracking_ms": 9.294092500000001,
+        "refinement_ms": 2.3932455
+      },
+      "resources_first_last": [
+        "VmRSS:\t   16452 kB Threads:\t4 ",
+        "VmRSS:\t   16916 kB Threads:\t4 "
+      ],
+      "evaluated_poses_range": [
+        137143,
+        137143
+      ]
+    },
+    "speed-final-500": {
+      "iterations": 500,
+      "warmup": 20,
+      "threads": 4,
+      "median_ms": 29.636433,
+      "p95_ms": 38.252497,
+      "min_ms": 22.340949,
+      "max_ms": 69.206729,
+      "stage_medians_ms": {
+        "pyramid_ms": 9.610783999999999,
+        "coarse_ms": 6.408169,
+        "tracking_ms": 10.3225525,
+        "refinement_ms": 2.7289035
+      },
+      "resources_first_last": [
+        "VmRSS:\t   11276 kB Threads:\t4 ",
+        "VmRSS:\t   10656 kB Threads:\t4 "
+      ],
+      "evaluated_poses_range": [
+        137143,
+        137143
+      ]
+    },
+    "speed-final-repeat-500": {
+      "iterations": 500,
+      "warmup": 20,
+      "threads": 4,
+      "median_ms": 27.837164,
+      "p95_ms": 33.644088,
+      "min_ms": 21.958821,
+      "max_ms": 60.582692,
+      "stage_medians_ms": {
+        "pyramid_ms": 9.29115,
+        "coarse_ms": 6.078227500000001,
+        "tracking_ms": 9.663581,
+        "refinement_ms": 2.6643665
+      },
+      "resources_first_last": [
+        "VmRSS:\t   11196 kB Threads:\t4 ",
+        "VmRSS:\t   10576 kB Threads:\t4 "
+      ],
+      "evaluated_poses_range": [
+        137143,
+        137143
+      ]
+    },
+    "speed-native-500": {
+      "iterations": 500,
+      "warmup": 20,
+      "threads": 4,
+      "median_ms": 26.168092,
+      "p95_ms": 32.927404,
+      "min_ms": 20.516104,
+      "max_ms": 41.24012,
+      "stage_medians_ms": {
+        "pyramid_ms": 9.092358,
+        "coarse_ms": 5.867872500000001,
+        "tracking_ms": 8.426603,
+        "refinement_ms": 2.232114
+      },
+      "resources_first_last": [
+        "VmRSS:\t   11292 kB Threads:\t4 ",
+        "VmRSS:\t   10692 kB Threads:\t4 "
+      ],
+      "evaluated_poses_range": [
+        137143,
+        137143
+      ]
+    }
+  }
+}

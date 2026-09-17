@@ -218,7 +218,9 @@ std::shared_ptr<TrainedData> BuildModel(const Image &im, const Params &params) {
                          : Str(p, "optimization") == "point_reduction_low"  ? 192
                          : Str(p, "optimization") == "point_reduction_high" ? 48
                                                                             : 96;
-        data->levels.push_back({SelectModelFeatures(features, maximum), factor});
+        auto selected = SelectModelFeatures(features, maximum);
+        auto coarse = SelectModelFeatures(selected, 12);
+        data->levels.push_back({std::move(selected), factor, std::move(coarse)});
         if (l + 1 < count_levels)
             current = Downsample(current);
     }

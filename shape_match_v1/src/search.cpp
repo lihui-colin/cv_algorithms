@@ -21,6 +21,12 @@ struct ScoringPoint {
     double x, y, nx, ny;
     int pixel_x, pixel_y;
 };
+struct CoarseModelCache {
+    int level = 0;
+    std::array<double, 6> key{};
+    std::vector<std::pair<double, double>> transforms;
+    std::vector<std::vector<ScoringPoint>> prepared;
+};
 
 // Both search paths share distance, polarity, normalization and pruning.
 // The point accessor is inlined; it either transforms a model point or reads
@@ -73,10 +79,42 @@ double EvaluatePose(const Features &features, const EdgeField &im, const Pose &p
                             y,
                             c * feature.n.x - s * feature.n.y,
                             s * feature.n.x + c * feature.n.y,
-                            int(std::lround(x)),
-                            int(std::lround(y))};
+                            ScorePixel(x, im.width),
+                            ScorePixel(y, im.height)};
     });
 }
+
+// Worker-local cache for an immutable feature set. Only translations reuse it; neither scene
+// observations nor pixel indices are cached across poses.
+class TranslationScoreCache {
+  public:
+    explicit TranslationScoreCache(const Features &features) : features_(features) {}
+    double Score(const EdgeField &field, const Pose &pose, const std::string &metric, double sigma) {
+        if (!valid_ || theta_ != pose.theta || scale_ != pose.scale) {
+            const double c = std::cos(pose.theta), s = std::sin(pose.theta);
+            points_.resize(features_.size());
+            for (size_t i = 0; i < features_.size(); ++i) {
+                const auto &f = features_[i];
+                points_[i] = {pose.scale * (c * f.p.x - s * f.p.y),
+                              pose.scale * (s * f.p.x + c * f.p.y),
+                              c * f.n.x - s * f.n.y, s * f.n.x + c * f.n.y, 0, 0};
+            }
+            theta_ = pose.theta;
+            scale_ = pose.scale;
+            valid_ = true;
+        }
+        return ScorePoints(points_.size(), field, metric, sigma, 0, [&](size_t i) {
+            const auto &p = points_[i];
+            const double x = pose.x + p.x, y = pose.y + p.y;
+            return ScoringPoint{x, y, p.nx, p.ny, ScorePixel(x, field.width), ScorePixel(y, field.height)};
+        });
+    }
+  private:
+    const Features &features_;
+    std::vector<ScoringPoint> points_;
+    double theta_ = 0, scale_ = 1;
+    bool valid_ = false;
+};
 
 static std::vector<ScoringPoint> PrepareCoarsePoints(const Features &features, double angle,
                                                      double scale) {
@@ -167,31 +205,28 @@ static std::vector<Candidate> MergeCandidatesByScale(std::vector<Candidate> cand
     }
     return selected;
 }
-std::vector<Candidate> SearchCoarsestLevel(const ModelSnapshot &m, const SearchPyramid &pyramid,
-                                           int level, SearchDiagnostics &diag) {
-    const auto &field = pyramid[level].field;
+static std::shared_ptr<const CoarseModelCache> GetCoarseModelCache(const ModelSnapshot &m,
+                                                                 int level) {
     const auto &ml = m.data->levels[level];
     double start = Num(m.params, "angle_start"), end = Num(m.params, "angle_end");
+    const double low = ScaleMin(m), high = ScaleMax(m);
+    const std::array<double, 6> key{start, end, low, high, Num(m.params, "angle_step"),
+                                  Num(m.params, "iso_scale_step")};
+    std::lock_guard<std::mutex> lock(m.data->coarse_cache.mutex);
+    if (m.data->coarse_cache.value && m.data->coarse_cache.value->level == level &&
+        m.data->coarse_cache.value->key == key)
+        return m.data->coarse_cache.value;
     double da =
         std::min(0.20, std::max(Num(m.params, "angle_step"), ml.factor * 0.8 / m.data->radius));
     double ds = std::max(Num(m.params, "iso_scale_step"), ml.factor * 0.75 / m.data->radius);
     int na = std::max(1, int(std::ceil((end - start) / da))),
-        ns = std::max(1, int(std::ceil((ScaleMax(m) - ScaleMin(m)) / ds)));
+        ns = std::max(1, int(std::ceil((high - low) / ds)));
     Require(int64_t(na + 1) * (ns + 1) < 1000000, ErrorCode::Value,
             "Angle/scale grid exceeds implementation resource envelope");
-    // This pass is a candidate generator only; all retained hypotheses are
-    // rescored with the complete model below and on every finer level.  A
-    // sparse, more tolerant probe is enough to avoid spending the bulk of the
-    // runtime proving that almost every image location is background.
-    Features coarse = SelectModelFeatures(ml.features, 12);
-    double threshold =
-        std::max(0.15, Num(m.params, "min_score") * (0.62 + 0.16 * Num(m.params, "greediness")));
-    const std::string metric = Str(m.params, "metric");
-    const double fast_threshold = std::max(0.10, threshold * 0.55);
-    constexpr int stride = 8;
-    const int w = (field.width + stride - 1) / stride;
-    const int h = (field.height + stride - 1) / stride;
-    std::vector<std::pair<double, double>> transforms;
+    auto cache = std::make_shared<CoarseModelCache>();
+    cache->level = level;
+    cache->key = key;
+    auto &transforms = cache->transforms;
     for (int ai = 0; ai <= na; ++ai) {
         if (end == start && ai > 0)
             break;
@@ -199,19 +234,47 @@ std::vector<Candidate> SearchCoarsestLevel(const ModelSnapshot &m, const SearchP
             break;
         const double angle = start + (end - start) * ai / na;
         for (int si = 0; si <= ns; ++si) {
-            if (ScaleMax(m) == ScaleMin(m) && si > 0)
+            if (high == low && si > 0)
                 break;
-            const double scale = ScaleMin(m) + (ScaleMax(m) - ScaleMin(m)) * si / ns;
+            const double scale = low + (high - low) * si / ns;
             transforms.push_back({angle, scale});
         }
     }
+    constexpr size_t max_bytes = 8 * 1024 * 1024;
+    const size_t bytes = transforms.capacity() * sizeof(transforms[0]) + transforms.size() *
+        (sizeof(std::vector<ScoringPoint>) + ml.coarse_features.size() * sizeof(ScoringPoint));
+    if (bytes <= max_bytes) {
+        cache->prepared.reserve(transforms.size());
+        for (const auto &t : transforms)
+            cache->prepared.push_back(PrepareCoarsePoints(ml.coarse_features, -t.first, t.second));
+        m.data->coarse_cache.value = cache;
+    }
+    // Oversized grids use the original per-transform scratch path, not a retained cache.
+    return cache;
+}
+
+std::vector<Candidate> SearchCoarsestLevel(const ModelSnapshot &m, const SearchPyramid &pyramid,
+                                           int level, SearchDiagnostics &diag) {
+    const auto &field = pyramid[level].field;
+    const auto &coarse = m.data->levels[level].coarse_features;
+    const auto cache = GetCoarseModelCache(m, level);
+    const auto &transforms = cache->transforms;
+    double threshold =
+        std::max(0.15, Num(m.params, "min_score") * (0.62 + 0.16 * Num(m.params, "greediness")));
+    const std::string metric = Str(m.params, "metric");
+    const double fast_threshold = std::max(0.10, threshold * 0.55);
+    constexpr int stride = 8;
+    const int w = (field.width + stride - 1) / stride;
+    const int h = (field.height + stride - 1) / stride;
     std::vector<std::vector<Candidate>> transform_candidates(transforms.size());
     ParallelFor(transforms.size(), [&](size_t begin, size_t finish, size_t) {
         std::vector<float> scores(size_t(w) * h);
         for (size_t job = begin; job < finish; ++job) {
             const double angle = transforms[job].first;
             const double scale = transforms[job].second;
-            const auto prepared = PrepareCoarsePoints(coarse, -angle, scale);
+            const auto scratch = cache->prepared.empty() ? PrepareCoarsePoints(coarse, -angle, scale)
+                                                          : std::vector<ScoringPoint>{};
+            const auto &prepared = cache->prepared.empty() ? scratch : cache->prepared[job];
             for (int y = 0; y < h; ++y)
                 for (int x = 0; x < w; ++x)
                     scores[size_t(y) * w + x] = float(EvaluatePreparedCoarse(
@@ -252,24 +315,37 @@ std::vector<Candidate> SearchCoarsestLevel(const ModelSnapshot &m, const SearchP
     diag.coarse_candidates += selected.size();
     return selected;
 }
-static Pose ImproveCoordinate(const ModelSnapshot &m, const Features &features,
+static Candidate ImproveCoordinate(const ModelSnapshot &m, const Features &features,
                               const EdgeField &field, Pose pose, int level, int iterations,
-                              SearchDiagnostics &diag) {
+                              SearchDiagnostics &diag, TranslationScoreCache *workspace = nullptr) {
     double factor = double(1 << level);
     double step[4] = {1.0, 1.0,
                       std::max(Num(m.params, "angle_step"), 0.8 * factor / m.data->radius),
                       std::max(Num(m.params, "iso_scale_step"), 0.7 * factor / m.data->radius)};
     double sigma = level == 0 ? 0.8 : 1.0;
     const std::string metric = Str(m.params, "metric");
-    auto score = [&](const Pose &p) {
+    // Search parameters are immutable for this candidate. Resolve the variant
+    // map once, not for every coordinate trial.
+    const double scale_min = ScaleMin(m), scale_max = ScaleMax(m);
+    const double angle_start = Num(m.params, "angle_start"), angle_end = Num(m.params, "angle_end");
+    auto within_bounds = [&](const Pose &p) {
+        const double a = angle_start +
+            std::fmod(std::fmod(-p.theta - angle_start, 2 * pi) + 2 * pi, 2 * pi);
+        return (a <= angle_end + .05 || a >= angle_start + 2 * pi - .05) &&
+               p.scale >= scale_min - .05 && p.scale <= scale_max + .05;
+    };
+    TranslationScoreCache local_cache(features);
+    auto &translation_cache = workspace ? *workspace : local_cache;
+    auto score = [&](const Pose &p, bool translation_only = false) {
         ++diag.evaluated_poses;
-        return EvaluatePose(features, field, p, metric, sigma);
+        return translation_only ? translation_cache.Score(field, p, metric, sigma)
+                                : EvaluatePose(features, field, p, metric, sigma);
     };
     double best = score(pose);
     for (int pass = 0; pass < iterations; ++pass) {
         bool improved = false;
         for (int k = 0; k < 4; ++k) {
-            if (k == 3 && ScaleMin(m) == ScaleMax(m))
+            if (k == 3 && scale_min == scale_max)
                 continue;
             Pose accepted = pose;
             for (int sign : {-1, 1}) {
@@ -282,9 +358,9 @@ static Pose ImproveCoordinate(const ModelSnapshot &m, const Features &features,
                     test.theta += sign * step[k];
                 if (k == 3)
                     test.scale += sign * step[k];
-                if (test.scale <= 0 || !WithinBounds(m, test, 0.05))
+                if (test.scale <= 0 || !within_bounds(test))
                     continue;
-                double v = score(test);
+                double v = score(test, k < 2);
                 if (v > best) {
                     best = v;
                     accepted = test;
@@ -297,22 +373,20 @@ static Pose ImproveCoordinate(const ModelSnapshot &m, const Features &features,
             for (double &v : step)
                 v *= 0.5;
     }
-    return pose;
+    return {pose, best};
 }
 static void ImproveCandidatesParallel(const ModelSnapshot &m, const Features &features,
                                       const EdgeField &field, std::vector<Candidate> &candidates,
                                       int level, int iterations, SearchDiagnostics &diag) {
     const size_t workers = SearchWorkerCount(candidates.size());
     std::vector<size_t> evaluations(workers);
-    const std::string metric = Str(m.params, "metric");
     ParallelFor(candidates.size(), [&](size_t begin, size_t end, size_t worker) {
         SearchDiagnostics local;
+        TranslationScoreCache workspace(features);
         for (size_t index = begin; index < end; ++index) {
             auto &candidate = candidates[index];
-            candidate.pose =
-                ImproveCoordinate(m, features, field, candidate.pose, level, iterations, local);
-            candidate.score =
-                EvaluatePose(features, field, candidate.pose, metric, level == 0 ? 0.8 : 1.0);
+            candidate =
+                ImproveCoordinate(m, features, field, candidate.pose, level, iterations, local, &workspace);
         }
         evaluations[worker] = local.evaluated_poses;
     });
@@ -549,8 +623,9 @@ Candidate RefineInstance(const ModelSnapshot &m, const PyramidLevel &image, Cand
         double damping = 1e-4;
         // Dense points reduce discretization bias, while search retains sparse points.
         const auto method = Str(m.params, "refinement_method");
-        Features dense = SelectModelFeatures(method == "gradient_gaussian" ? m.data->gaussian_dense
-                                                                           : m.data->dense, 1200);
+        const auto &all = method == "gradient_gaussian" ? m.data->gaussian_dense : m.data->dense;
+        const auto subset = all.size() > 1200 ? SelectModelFeatures(all, 1200) : Features{};
+        const auto &dense = all.size() <= 1200 ? all : subset;
         Require(dense.size() >= 12, ErrorCode::Geometry, "Insufficient refinement model points");
         const auto metric = Str(m.params, "metric");
         const bool continuous = method != "nearest_point";

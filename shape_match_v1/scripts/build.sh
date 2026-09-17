@@ -16,7 +16,7 @@ for source in "${sources[@]}"; do
   objects+=("$object")
 done
 ar rcs "$build_dir/libshape_match.a" "${objects[@]}"
-for entry in examples/match_sample.cpp tests/test_match.cpp tests/test_parallel.cpp tests/test_precision.cpp tests/test_normal_profile.cpp tests/accuracy_bench.cpp tests/performance_bench.cpp tests/refinement_probe.cpp tests/halcon_parameter_probe.cpp tests/refinement_trajectory.cpp; do
+for entry in examples/match_sample.cpp tests/test_match.cpp tests/test_parallel.cpp tests/test_precision.cpp tests/test_normal_profile.cpp tests/test_scoring.cpp tests/accuracy_bench.cpp tests/performance_bench.cpp tests/refinement_probe.cpp tests/halcon_parameter_probe.cpp tests/refinement_trajectory.cpp; do
   "$compiler" "${flags[@]}" "$entry" "$build_dir/libshape_match.a" -o "$build_dir/$(basename "${entry%.cpp}")"
 done
 echo "Built library, sample, tests and accuracy benchmark in $build_dir/"

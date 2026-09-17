@@ -10,7 +10,7 @@
 - 全图样例实际检出 3 个 ring、4 个 nut；非按坐标硬编码返回。
 - 独立无噪声合成集 30 案例全部检出；具体位置 RMSE 与误差分布见 [results/VALIDATION.md](results/VALIDATION.md)。
 - 该合成集达到 1/30 px RMSE 目标不代表任意实拍图达到该精度。
-- 640×480 双模板样例的热缓存搜索在本机 32 线程中位数约 27 ms；实际耗时取决于 CPU、系统负载和搜索范围，测试方法见 [docs/OPTIMIZATION.md](docs/OPTIMIZATION.md)。
+- 640×480 双模板样例采用保守的 4 线程默认配置；持续运行尚未通过 P95 ≤20ms 验收，最新测试见 [速度优化记录](docs/SPEED_OPTIMIZATION.md)。
 - 未在本环境执行 HALCON 运行时差分；已有 HALCON CSV 只作为参照，非绝对真值。
 
 ## 目录
@@ -48,8 +48,8 @@ bash scripts/build.sh
 ./build/accuracy_bench results/accuracy.csv
 ```
 
-搜索默认最多使用 32 个工作线程。可在进程启动前通过 `SHAPE_MATCH_NUM_THREADS=N` 指定
-线程数，例如 `SHAPE_MATCH_NUM_THREADS=8 ./build/performance_bench 50`。配置在首次使用时
+搜索默认最多使用 4 个工作线程。可在进程启动前通过 `SHAPE_MATCH_NUM_THREADS=N` 指定
+线程数，例如 `SHAPE_MATCH_NUM_THREADS=4 ./build/performance_bench 500 /tmp/benchmark.json`。配置在首次使用时
 固定，最多使用硬件报告的线程数；无效值使用 1 线程。性能比较必须使用相同线程数。
 
 PGM 文件已经包含在包内，运行匹配不需要 Python。构建产生静态库 `build/libshape_match.a`。
